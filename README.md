@@ -4,6 +4,9 @@ A local, open-source alternative to Auphonic for podcast and audio post-producti
 
 ![CastPolish web UI](https://img.shields.io/badge/platform-macOS-blue) ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue) ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
+![Process Audio UI](screenshots/process-audio.png)
+![Settings & Dependencies](screenshots/settings.png)
+
 ---
 
 ## What it does
