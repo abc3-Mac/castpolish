@@ -365,12 +365,14 @@ def diarize(wav_path: str, hf_token: str, num_speakers: int | None = None,
 def assign_speakers(segments: list, diarization: dict) -> list:
     if not diarization:
         return segments
+    # Map raw pyannote IDs (SPEAKER_00, SPEAKER_01…) to friendly names (Speaker 1, Speaker 2…)
+    sorted_ids = sorted(diarization.keys())
+    label_map  = {raw: f"Speaker {i+1}" for i, raw in enumerate(sorted_ids)}
     intervals = sorted(
-        [(s, e, spk) for spk, turns in diarization.items() for s, e in turns],
+        [(s, e, label_map[spk]) for spk, turns in diarization.items() for s, e in turns],
         key=lambda x: x[0]
     )
     for seg in segments:
-        mid = (seg["start"] + seg["end"]) / 2
         best, best_ov = None, 0.0
         for s, e, spk in intervals:
             if s > seg["end"]:
@@ -741,6 +743,16 @@ _TRANSCRIPT_HTML = r"""<!DOCTYPE html>
   --word-hover:rgba(255,255,255,.07);--playing:#f5c518;--low-conf:#e05c5c;
   --font:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif
 }
+[data-theme="light"]{
+  --bg:#f2f2f7;--surface:#ffffff;--surface2:#e8e8f0;--border:#d0d0e0;
+  --text:#1a1a2e;--muted:#6060a0;--word-hover:rgba(0,0,0,.06)
+}
+@media(prefers-color-scheme:light){
+  :root:not([data-theme="dark"]){
+    --bg:#f2f2f7;--surface:#ffffff;--surface2:#e8e8f0;--border:#d0d0e0;
+    --text:#1a1a2e;--muted:#6060a0;--word-hover:rgba(0,0,0,.06)
+  }
+}
 body{font-family:var(--font);background:var(--bg);color:var(--text);
   height:100vh;display:flex;flex-direction:column;overflow:hidden;font-size:15px}
 /* Header */
@@ -825,6 +837,7 @@ p.para{margin-bottom:.5rem;line-height:1.85}
     <button class="xbtn" onclick="dl('vtt')">VTT</button>
     <button class="xbtn" onclick="dl('srt')">SRT</button>
     <button class="xbtn" onclick="dl('txt')">TXT</button>
+    <button class="xbtn" id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark">🌙</button>
   </div>
 </header>
 <div class="layout">
@@ -919,11 +932,13 @@ if(chs.length===0){
 }
 
 function renderSegs(ss,container){
-  let para=null;
+  let para=null, lastSpk=null;
   ss.forEach(seg=>{
     if(seg.newpara||!para){
       para=document.createElement('p');para.className='para';container.appendChild(para);
-      if(seg.speaker){const t=document.createElement('span');t.className='spk';t.textContent=seg.speaker;para.appendChild(t);}
+      if(seg.speaker){const t=document.createElement('span');t.className='spk';t.textContent=seg.speaker;para.appendChild(t);lastSpk=seg.speaker;}
+    } else if(seg.speaker && seg.speaker!==lastSpk){
+      const t=document.createElement('span');t.className='spk';t.textContent=seg.speaker;para.appendChild(t);lastSpk=seg.speaker;
     }
     const words=seg.timestamps||[];
     if(!words.length){
@@ -1024,6 +1039,9 @@ function vttTs(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=(s%60
 function srtTs(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=Math.floor(s%60),ms=Math.floor((s%1)*1000);return`${p(h)}:${p(m)}:${p(sec)},${String(ms).padStart(3,'0')}`;}
 function p(n){return String(n).padStart(2,'0')}
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function applyTheme(t){document.documentElement.setAttribute('data-theme',t);const b=document.getElementById('theme-btn');if(b)b.textContent=t==='light'?'☀️':'🌙';}
+function toggleTheme(){const cur=document.documentElement.getAttribute('data-theme')||(window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark');const next=cur==='light'?'dark':'light';applyTheme(next);localStorage.setItem('cp-theme',next);}
+(function(){const s=localStorage.getItem('cp-theme')||( window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark');applyTheme(s);})();
 </script>
 </body>
 </html>
