@@ -349,11 +349,19 @@ def diarize(wav_path: str, hf_token: str, num_speakers: int | None = None,
     """Returns {speaker_id: [(start, end), ...]}. Requires pyannote.audio."""
     if not HAS_PYANNOTE:
         raise RuntimeError("pyannote.audio not installed: pip install pyannote.audio")
+    import torch as _torch
+    if _torch.backends.mps.is_available():
+        device = _torch.device("mps")
+    elif _torch.cuda.is_available():
+        device = _torch.device("cuda")
+    else:
+        device = _torch.device("cpu")
     if log:
-        log("Running speaker diarization…")
+        log(f"Running speaker diarization on {device}…")
     pipeline = PyannotePipeline.from_pretrained(
         "pyannote/speaker-diarization-3.1", token=hf_token
     )
+    pipeline.to(device)
     params = {"num_speakers": num_speakers} if num_speakers else {}
     result = pipeline(wav_path, **params)
     out: dict[str, list] = {}
