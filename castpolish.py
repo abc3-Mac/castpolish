@@ -352,7 +352,7 @@ def diarize(wav_path: str, hf_token: str, num_speakers: int | None = None,
     if log:
         log("Running speaker diarization…")
     pipeline = PyannotePipeline.from_pretrained(
-        "pyannote/speaker-diarization-3.1", use_auth_token=hf_token
+        "pyannote/speaker-diarization-3.1", token=hf_token
     )
     params = {"num_speakers": num_speakers} if num_speakers else {}
     result = pipeline(wav_path, **params)
@@ -1591,7 +1591,9 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
                 diarization = diarize(wav_for_whisper, hf_token, log=log)
                 raw_segs = assign_speakers(raw_segs, diarization)
             except Exception as exc:
-                log(f"Diarization failed: {exc}")
+                log(f"⚠️ Diarization failed: {exc}")
+                import traceback as _tb
+                log(_tb.format_exc())
         else:
             log("Diarization skipped: set HF_TOKEN env var or pass --hf-token")
 
