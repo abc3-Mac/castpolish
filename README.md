@@ -160,6 +160,38 @@ For batch jobs on Intel, `--model small` is the best balance of speed and accura
 
 ---
 
+## Memory requirements
+
+The Whisper model is loaded fresh for each job and released when done — memory does not accumulate over time.
+
+**Idle (server running, no job active):** ~80 MB
+
+**Peak RAM during a job:**
+
+| Whisper model | Peak RAM |
+|---|---|
+| tiny | ~150 MB |
+| small ✓ (default) | ~450 MB |
+| medium | ~1.2 GB |
+| large-v2 / large-v3 | ~2.5 GB |
+
+*CastPolish uses `compute_type="auto"` which selects int8 quantization on CPU, cutting model memory roughly in half vs. full float16.*
+
+**Optional components (separate processes):**
+
+| Component | RAM |
+|---|---|
+| Ollama + llama3.2 | ~2 GB (always-on if Ollama is running) |
+| pyannote.audio diarization | +1–1.5 GB during diarization pass |
+
+**Practical minimums:**
+
+- **8 GB RAM** — use `small` model. Avoid running Ollama at the same time on 8 GB Intel Macs.
+- **16 GB RAM** — `medium` + Ollama simultaneously is comfortable.
+- **32 GB+ RAM** — `large-v2` with all features enabled works fine.
+
+---
+
 ## Configuration
 
 Settings are saved to `~/.castpolish/config.json`. You can also configure via the Settings tab in the web UI:
