@@ -1065,6 +1065,16 @@ _ENGINE_HTML = r"""<!DOCTYPE html>
   --success:#4caf7d;--warn:#f5c518;--error:#e05c5c;
   --font:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif
 }
+[data-theme="light"]{
+  --bg:#f2f2f7;--surface:#ffffff;--surface2:#e8e8f0;--border:#d0d0e0;
+  --text:#1a1a2e;--muted:#6060a0
+}
+@media(prefers-color-scheme:light){
+  :root:not([data-theme="dark"]){
+    --bg:#f2f2f7;--surface:#ffffff;--surface2:#e8e8f0;--border:#d0d0e0;
+    --text:#1a1a2e;--muted:#6060a0
+  }
+}
 body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh}
 nav{background:var(--surface);border-bottom:1px solid var(--border);
   padding:.75rem 2rem;display:flex;align-items:center;gap:1rem}
@@ -1103,7 +1113,7 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
 .jobs-table{width:100%;border-collapse:collapse;font-size:.83rem}
 .jobs-table th{text-align:left;padding:.5rem .75rem;border-bottom:1px solid var(--border);
   font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
-.jobs-table td{padding:.6rem .75rem;border-bottom:1px solid rgba(48,48,74,.5)}
+.jobs-table td{padding:.6rem .75rem;border-bottom:1px solid var(--border)}
 .jobs-table tr:last-child td{border-bottom:none}
 .status-badge{display:inline-block;padding:.15rem .5rem;border-radius:4px;font-size:.7rem;font-weight:600}
 .s-queued{background:rgba(120,120,160,.2);color:var(--muted)}
@@ -1126,6 +1136,9 @@ a{color:var(--accent2)}
 <nav>
   <a class="logo" href="/">⟁ CastPolish</a>
   <span class="nav-sub">Open-source audio processing &amp; transcription</span>
+  <button id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark mode"
+    style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:6px;
+           padding:.25rem .5rem;cursor:pointer;font-size:1rem;color:var(--text);line-height:1">🌙</button>
 </nav>
 <main>
 
@@ -1181,13 +1194,19 @@ a{color:var(--accent2)}
   </div>
 
   <div style="margin-top:1rem">
-    <div class="toggle-row">
-      <input type="checkbox" id="normalize" checked>
-      <span>Loudness normalisation + adaptive leveling</span>
+    <div class="toggle-row" style="padding-bottom:.5rem;margin-bottom:.5rem;border-bottom:1px solid var(--border)">
+      <input type="checkbox" id="transcribe_only" onchange="updateTranscribeOnly()">
+      <span><strong>Transcribe &amp; summarize only</strong> <span style="color:var(--muted);font-size:.75rem">(skip audio processing — faster)</span></span>
     </div>
-    <div class="toggle-row">
-      <input type="checkbox" id="denoise">
-      <span>Noise reduction <span style="color:var(--muted);font-size:.75rem">(ffmpeg afftdn — adds ~20s)</span></span>
+    <div id="audio-opts" style="transition:opacity .2s">
+      <div class="toggle-row">
+        <input type="checkbox" id="normalize" checked>
+        <span>Loudness normalisation + adaptive leveling</span>
+      </div>
+      <div class="toggle-row">
+        <input type="checkbox" id="denoise">
+        <span>Noise reduction <span style="color:var(--muted);font-size:.75rem">(ffmpeg afftdn — adds ~20s)</span></span>
+      </div>
     </div>
     <div class="toggle-row">
       <input type="checkbox" id="diarize">
@@ -1286,6 +1305,7 @@ async function submitJob(){
   fd.append('task',document.getElementById('task').value);
   fd.append('lufs',document.getElementById('lufs').value);
   fd.append('outfmt',document.getElementById('outfmt').value);
+  fd.append('transcribe_only',document.getElementById('transcribe_only').checked?'1':'0');
   fd.append('normalize',document.getElementById('normalize').checked?'1':'0');
   fd.append('denoise',document.getElementById('denoise').checked?'1':'0');
   fd.append('diarize',document.getElementById('diarize').checked?'1':'0');
@@ -1409,6 +1429,33 @@ async function saveSettings(){
   await loadConfig();
 }
 
+// ── Theme toggle ──────────────────────────────────────────────────────────────
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  const btn=document.getElementById('theme-btn');
+  if(btn)btn.textContent=t==='light'?'☀️':'🌙';
+}
+function toggleTheme(){
+  const cur=document.documentElement.getAttribute('data-theme')||
+    (window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark');
+  const next=cur==='light'?'dark':'light';
+  applyTheme(next);
+  localStorage.setItem('cp-theme',next);
+}
+(function(){
+  const saved=localStorage.getItem('cp-theme');
+  const sys=window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark';
+  applyTheme(saved||sys);
+})();
+
+// ── Transcribe-only toggle ────────────────────────────────────────────────────
+function updateTranscribeOnly(){
+  const skip=document.getElementById('transcribe_only').checked;
+  const opts=document.getElementById('audio-opts');
+  opts.style.opacity=skip?'0.35':'1';
+  opts.style.pointerEvents=skip?'none':'';
+}
+
 pollJobs();loadDeps();loadConfig();
 setInterval(()=>{
   fetch('/api/jobs').then(r=>r.json()).then(j=>{
@@ -1487,14 +1534,23 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
 
     # ── 1. Audio processing ──────────────────────────────────────────────────
     out_audio = os.path.join(output_dir, f"{safe_stem}.{fmt}")
-    wav_for_whisper = process_audio(
-        input_path, out_audio,
-        fmt=fmt,
-        normalize=settings.get("normalize", True),
-        denoise=settings.get("denoise", False),
-        target_lufs=float(settings.get("lufs", -16.0)),
-        log=log,
-    )
+    if settings.get("transcribe_only"):
+        log("Audio processing skipped — transcribe-only mode.")
+        import shutil as _shutil
+        _shutil.copy2(input_path, out_audio)
+        tmp_wav_dir = tempfile.mkdtemp(prefix="cp_wav_")
+        whisper_wav = os.path.join(tmp_wav_dir, "whisper.wav")
+        _ffmpeg("-i", input_path, "-ac", "1", "-ar", "16000", "-f", "wav", whisper_wav)
+        wav_for_whisper = whisper_wav
+    else:
+        wav_for_whisper = process_audio(
+            input_path, out_audio,
+            fmt=fmt,
+            normalize=settings.get("normalize", True),
+            denoise=settings.get("denoise", False),
+            target_lufs=float(settings.get("lufs", -16.0)),
+            log=log,
+        )
 
     duration = get_duration(out_audio) or get_duration(input_path)
 
@@ -1607,6 +1663,7 @@ def make_app(output_dir: str) -> "Flask":
             "language":  request.form.get("language", "").strip() or None,
             "task":      request.form.get("task", "transcribe"),
             "outfmt":    request.form.get("outfmt", "mp3"),
+            "transcribe_only": request.form.get("transcribe_only", "0") == "1",
             "normalize": request.form.get("normalize", "1") == "1",
             "denoise":   request.form.get("denoise", "0") == "1",
             "diarize":   request.form.get("diarize", "0") == "1",
