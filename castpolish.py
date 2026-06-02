@@ -364,8 +364,10 @@ def diarize(wav_path: str, hf_token: str, num_speakers: int | None = None,
     pipeline.to(device)
     params = {"num_speakers": num_speakers} if num_speakers else {}
     result = pipeline(wav_path, **params)
+    # pyannote v4 wraps the Annotation in a DiarizeOutput dataclass
+    annotation = getattr(result, "speaker_diarization", result)
     out: dict[str, list] = {}
-    for turn, _, speaker in result.itertracks(yield_label=True):
+    for turn, _, speaker in annotation.itertracks(yield_label=True):
         out.setdefault(speaker, []).append((turn.start, turn.end))
     return out
 
