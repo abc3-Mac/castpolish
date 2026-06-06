@@ -105,6 +105,16 @@ try:
 except ImportError:
     HAS_PYANNOTE = False
 
+try:
+    import importlib.util as _ilu
+    # deepfilternet installs as the 'df' module; check both to avoid false positives
+    HAS_DEEPFILTERNET = (
+        _ilu.find_spec("df") is not None and
+        _ilu.find_spec("df.enhance") is not None
+    )
+except Exception:
+    HAS_DEEPFILTERNET = False
+
 # ─── Audio processing ─────────────────────────────────────────────────────────
 
 def _find_ffmpeg() -> str:
@@ -146,45 +156,72 @@ def get_duration(path: str) -> float:
     return 0.0
 
 
-def _denoise_wav(in_wav: str, out_wav: str, target_sr: int = 16000):
-    """Spectral noise reduction via noisereduce. Falls back to copy.
-    Downsamples to target_sr first — sufficient for Whisper and 4-8× faster."""
+def _denoise_noisereduce(in_wav: str, out_wav: str, log=None):
+    """Non-stationary spectral noise reduction via noisereduce library.
+    Preserves original sample rate and channel count. Falls back to copy."""
     if HAS_NOISEREDUCE and HAS_SOUNDFILE and HAS_NUMPY:
         try:
             data, rate = sf.read(in_wav)
-            # Downsample to target_sr to reduce FFT cost
-            if rate != target_sr:
-                from scipy.signal import resample_poly
-                from math import gcd
-                g = gcd(rate, target_sr)
-                data = resample_poly(data, target_sr // g, rate // g).astype("float32")
-                rate = target_sr
-            noise = data[:rate // 2] if len(data) > rate // 2 else data
-            reduced = nr.reduce_noise(y=data, sr=rate, y_noise=noise,
-                                      stationary=False, n_jobs=-1)
-            sf.write(out_wav, reduced, rate)
+            if log:
+                log("Applying dynamic noise reduction (noisereduce)…")
+            # Use first 0.5 s as rough noise profile; stationary=False adapts over time
+            noise_clip = data[:max(1, rate // 2)] if len(data) > rate // 2 else data
+            reduced = nr.reduce_noise(
+                y=data, sr=rate, y_noise=noise_clip,
+                stationary=False, n_jobs=-1
+            )
+            sf.write(out_wav, reduced.astype("float32"), rate)
             return
-        except Exception:
-            pass
+        except Exception as exc:
+            if log:
+                log(f"noisereduce error ({exc}), falling back to copy")
     shutil.copy(in_wav, out_wav)
+
+
+def _denoise_deepfilternet(in_wav: str, out_wav: str, log=None):
+    """AI speech enhancement via DeepFilterNet. Falls back to copy.
+    Model (~80 MB) is auto-downloaded to ~/.cache/DeepFilterNet3/ on first use."""
+    if not HAS_DEEPFILTERNET:
+        shutil.copy(in_wav, out_wav)
+        return
+    try:
+        from df.enhance import enhance, init_df, load_audio, save_audio
+        if log:
+            log("Loading DeepFilterNet model (first run downloads ~80 MB)…")
+        model, df_state, _ = init_df()
+        audio, _ = load_audio(in_wav, sr=df_state.sr())
+        if log:
+            log("Applying AI speech enhancement (DeepFilterNet)…")
+        enhanced = enhance(model, df_state, audio)
+        save_audio(out_wav, enhanced, df_state.sr())
+    except Exception as exc:
+        if log:
+            log(f"DeepFilterNet error ({exc}), falling back to copy")
+        shutil.copy(in_wav, out_wav)
 
 
 def process_audio(input_path: str, output_audio: str,
                   fmt: str = "mp3",
-                  normalize: bool = True, denoise: bool = False,
+                  normalize: bool = True, noise_mode: str = "none",
                   target_lufs: float = -16.0,
                   log=None) -> str:
     """
     Full audio improvement pipeline — runs at original quality, then exports.
     Returns path to 16kHz mono WAV for Whisper transcription.
 
+    noise_mode values:
+      "none"          — no noise reduction
+      "afftdn"        — ffmpeg FFT noise filter (fast, always available)
+      "noisereduce"   — Python non-stationary spectral subtraction (requires noisereduce)
+      "deepfilternet" — AI speech enhancement via DeepFilterNet (~80 MB model)
+
     Processing chain (Auphonic-equivalent):
-      1. Noise reduction (optional, via noisereduce)
-      2. High-pass filter at 80 Hz  — removes rumble / HVAC noise
+      1. Noise reduction (optional)
+      2. High-pass filter at 80 Hz  — removes mic rumble / HVAC noise
       3. Adaptive leveling          — multiband-style compressor evens speech
       4. EBU R128 loudness norm     — broadcast-standard target level
     """
-    tmp = tempfile.mkdtemp(prefix="auphonic_")
+    tmp = tempfile.mkdtemp(prefix="cp_")
 
     def info(msg):
         if log:
@@ -192,19 +229,33 @@ def process_audio(input_path: str, output_audio: str,
 
     src = input_path
 
+    # ── Python-based pre-processing noise reduction (noisereduce / deepfilternet) ─
+    # These operate on a WAV file before the ffmpeg filter chain.
+    if noise_mode in ("noisereduce", "deepfilternet"):
+        pre_wav = os.path.join(tmp, "pre_denoise.wav")
+        # Convert source to 44.1 kHz stereo PCM WAV — preserves quality, soundfile-friendly
+        _ffmpeg("-i", src, "-c:a", "pcm_s16le", "-ar", "44100", pre_wav)
+        denoised_wav = os.path.join(tmp, "denoised.wav")
+        if noise_mode == "noisereduce":
+            _denoise_noisereduce(pre_wav, denoised_wav, log=log)
+        else:
+            _denoise_deepfilternet(pre_wav, denoised_wav, log=log)
+        src = denoised_wav
+
     # ── Build filter chain ───────────────────────────────────────────────────
     #
     #  highpass    80 Hz low-cut — removes mic rumble / HVAC
-    #  afftdn      FFT-based noise reduction (optional) — runs inline in ffmpeg,
-    #              no separate pass, no hanging. nf=-25 targets a -25 dB noise floor.
+    #  afftdn      FFT-based noise reduction (inline, fast, always available)
+    #              nf=-25 targets a -25 dB noise floor
     #  acompressor gentle speech leveling — 2:1, slow attack/release keeps
     #              transients intact and avoids audible pumping
     #  alimiter    true-peak safety ceiling at -1 dBTP before encode
 
     filters = ["highpass=f=80"]
-    if denoise:
+    if noise_mode == "afftdn":
         info("Noise reduction enabled (afftdn)…")
         filters.append("afftdn=nf=-25")
+    # noisereduce / deepfilternet already applied above as pre-processing
     filters += [
         "acompressor=threshold=-18dB:ratio=2:attack=20:release=200:makeup=1dB:knee=6dB",
         "alimiter=limit=0.891:attack=5:release=50:level=false",
@@ -1231,9 +1282,14 @@ a{color:var(--accent2)}
         <input type="checkbox" id="normalize" checked>
         <span>Loudness normalisation + adaptive leveling</span>
       </div>
-      <div class="toggle-row">
-        <input type="checkbox" id="denoise">
-        <span>Noise reduction <span style="color:var(--muted);font-size:.75rem">(ffmpeg afftdn — adds ~20s)</span></span>
+      <div style="display:flex;align-items:center;gap:.6rem;padding:.3rem 0">
+        <label for="noise_mode" style="font-size:.85rem;color:var(--text);white-space:nowrap">Noise reduction</label>
+        <select id="noise_mode" style="flex:1;padding:.3rem .5rem;border-radius:6px;
+          border:1px solid var(--border);background:var(--surface2);color:var(--text);
+          font-size:.82rem;font-family:var(--font)">
+          <option value="none">None</option>
+          <option value="afftdn">Standard (ffmpeg afftdn)</option>
+        </select>
       </div>
     </div>
     <div class="toggle-row">
@@ -1335,7 +1391,7 @@ async function submitJob(){
   fd.append('outfmt',document.getElementById('outfmt').value);
   fd.append('transcribe_only',document.getElementById('transcribe_only').checked?'1':'0');
   fd.append('normalize',document.getElementById('normalize').checked?'1':'0');
-  fd.append('denoise',document.getElementById('denoise').checked?'1':'0');
+  fd.append('noise_mode',document.getElementById('noise_mode').value);
   fd.append('diarize',document.getElementById('diarize').checked?'1':'0');
   try{
     const r=await fetch('/api/process',{method:'POST',body:fd});
@@ -1393,11 +1449,26 @@ function renderJobs(jobs){
 async function loadDeps(){
   const r=await fetch('/api/deps');
   const deps=await r.json();
+
+  // ── Populate noise mode dropdown from available modes ─────────────────────
+  const sel=document.getElementById('noise_mode');
+  if(deps.noise_modes&&deps.noise_modes.length){
+    sel.innerHTML='';
+    deps.noise_modes.forEach(m=>{
+      const opt=document.createElement('option');
+      opt.value=m.value; opt.textContent=m.label;
+      sel.appendChild(opt);
+    });
+  }
+
+  // ── Render deps status table (skip the noise_modes entry itself) ──────────
   const el=document.getElementById('deps');
-  el.innerHTML=Object.entries(deps).map(([k,v])=>`
+  el.innerHTML=Object.entries(deps)
+    .filter(([k])=>k!=='noise_modes')
+    .map(([k,v])=>`
     <div class="feat">
       <strong>${esc(k)}</strong>
-      <span style="color:${v.ok?'var(--success)':'var(--error)'}">${v.ok?'✓ '+v.version:'✗ not installed'}</span>
+      <span style="color:${v.ok?'var(--success)':'var(--error)'}">${v.ok?'✓ '+esc(v.version||''):'✗ not installed'}</span>
     </div>`).join('');
 }
 
@@ -1543,8 +1614,9 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
       {title}.json         — word-level transcript (Auphonic format)
       {title}.html         — self-contained interactive transcript editor
 
-    settings keys: model, language, task, normalize, denoise, diarize,
-                   hf_token, lufs, outfmt (mp3|mp4), title
+    settings keys: model, language, task, normalize,
+                   noise_mode (none|afftdn|noisereduce|deepfilternet),
+                   diarize, hf_token, lufs, outfmt (mp3|mp4), title
     """
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -1575,7 +1647,7 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
             input_path, out_audio,
             fmt=fmt,
             normalize=settings.get("normalize", True),
-            denoise=settings.get("denoise", False),
+            noise_mode=settings.get("noise_mode", "none"),
             target_lufs=float(settings.get("lufs", -16.0)),
             log=log,
         )
@@ -1694,9 +1766,9 @@ def make_app(output_dir: str) -> "Flask":
             "task":      request.form.get("task", "transcribe"),
             "outfmt":    request.form.get("outfmt", "mp3"),
             "transcribe_only": request.form.get("transcribe_only", "0") == "1",
-            "normalize": request.form.get("normalize", "1") == "1",
-            "denoise":   request.form.get("denoise", "0") == "1",
-            "diarize":   request.form.get("diarize", "0") == "1",
+            "normalize":  request.form.get("normalize", "1") == "1",
+            "noise_mode": request.form.get("noise_mode", "none"),
+            "diarize":    request.form.get("diarize", "0") == "1",
             "lufs":      float(request.form.get("lufs", -16)),
             "title":     title,
         }
@@ -1844,13 +1916,32 @@ def make_app(output_dir: str) -> "Flask":
                 return None
 
         ffmpeg_ok = os.path.isfile(_FFMPEG_BIN) or bool(shutil.which("ffmpeg"))
+
+        # Build the list of available noise reduction modes
+        noise_modes = [
+            {"value": "none",   "label": "None"},
+            {"value": "afftdn", "label": "Standard (ffmpeg afftdn)"},
+        ]
+        if HAS_NOISEREDUCE and HAS_SOUNDFILE and HAS_NUMPY:
+            noise_modes.append({
+                "value": "noisereduce",
+                "label": "Dynamic (noisereduce — adapts over time)",
+            })
+        if HAS_DEEPFILTERNET:
+            noise_modes.append({
+                "value": "deepfilternet",
+                "label": "AI Enhanced (DeepFilterNet — highest quality)",
+            })
+
         return jsonify({
             "ffmpeg":         {"ok": ffmpeg_ok,          "version": "system" if ffmpeg_ok else None},
             "faster-whisper": {"ok": HAS_FASTER_WHISPER, "version": ver("faster-whisper")},
             "pyloudnorm":     {"ok": HAS_PYLOUDNORM,     "version": ver("pyloudnorm")},
             "soundfile":      {"ok": HAS_SOUNDFILE,      "version": ver("soundfile")},
             "noisereduce":    {"ok": HAS_NOISEREDUCE,    "version": ver("noisereduce")},
+            "deepfilternet":  {"ok": HAS_DEEPFILTERNET,  "version": ver("deepfilternet")},
             "pyannote.audio": {"ok": HAS_PYANNOTE,       "version": ver("pyannote.audio")},
+            "noise_modes":    noise_modes,
         })
 
     return app
@@ -1915,7 +2006,7 @@ def cmd_process(args):
         "task":        args.task,
         "outfmt":      args.format,
         "normalize":   not args.no_normalize,
-        "denoise":     args.denoise,
+        "noise_mode":  args.noise_mode,
         "diarize":     args.diarize,
         "hf_token":    args.hf_token or os.environ.get("HF_TOKEN") or cfg.get("hf_token"),
         "ollama_host": cfg.get("ollama_host", "http://localhost:11434"),
@@ -1987,8 +2078,9 @@ def main():
                         help="Output audio format (default: mp3)")
     proc_p.add_argument("--no-normalize", action="store_true",
                         help="Skip loudness normalisation and leveling")
-    proc_p.add_argument("--denoise",      action="store_true",
-                        help="Apply noise reduction (requires noisereduce)")
+    proc_p.add_argument("--noise-mode",  dest="noise_mode", default="none",
+                        choices=["none", "afftdn", "noisereduce", "deepfilternet"],
+                        help="Noise reduction: none | afftdn | noisereduce | deepfilternet")
     proc_p.add_argument("--diarize",      action="store_true",
                         help="Speaker diarization (requires pyannote.audio + HF_TOKEN)")
     proc_p.add_argument("--hf-token",     help="HuggingFace token for diarization")
