@@ -44,8 +44,12 @@ class _SafeEncoder(json.JSONEncoder):
 
 # ─── Config file (~/.auphonic-oss/config.json) ───────────────────────────────
 
-CONFIG_DIR  = Path.home() / ".castpolish"
-CONFIG_FILE = CONFIG_DIR / "config.json"
+CONFIG_DIR      = Path.home() / ".castpolish"
+CONFIG_FILE     = CONFIG_DIR / "config.json"
+_DF_VENV_DIR    = CONFIG_DIR / "df_venv"
+_DF_VENV_PYTHON = _DF_VENV_DIR / "bin" / "python"
+
+__version__ = "1.3.0"
 
 
 def load_config() -> dict:
@@ -105,15 +109,9 @@ try:
 except ImportError:
     HAS_PYANNOTE = False
 
-try:
-    import importlib.util as _ilu
-    # deepfilternet installs as the 'df' module; check both to avoid false positives
-    HAS_DEEPFILTERNET = (
-        _ilu.find_spec("df") is not None and
-        _ilu.find_spec("df.enhance") is not None
-    )
-except Exception:
-    HAS_DEEPFILTERNET = False
+# DeepFilterNet runs in an isolated venv (~/.castpolish/df_venv/) to avoid
+# numpy version conflicts with pyannote.audio.
+HAS_DEEPFILTERNET = _DF_VENV_PYTHON.exists()
 
 # ─── Audio processing ─────────────────────────────────────────────────────────
 
@@ -129,6 +127,130 @@ def _find_ffmpeg() -> str:
 
 
 _FFMPEG_BIN = _find_ffmpeg()
+
+
+# ─── PyPI version cache ───────────────────────────────────────────────────────
+
+_pypi_cache: dict = {}  # {pkg: (version_str, timestamp)}
+_pypi_cache_lock = threading.Lock()
+
+
+def _pypi_latest(pkg: str) -> str | None:
+    """Return the latest PyPI version of *pkg*, cached for 24 h.
+    Returns None on network error or if the cache entry is stale and the
+    background refresh hasn't completed yet."""
+    with _pypi_cache_lock:
+        entry = _pypi_cache.get(pkg)
+        if entry and time.time() - entry[1] < 86400:
+            return entry[0]
+        # Mark as fetching so we don't spawn duplicate threads
+        if _pypi_cache.get(f"__fetching_{pkg}"):
+            return entry[0] if entry else None
+        _pypi_cache[f"__fetching_{pkg}"] = True
+
+    def _fetch():
+        try:
+            req = urllib.request.Request(
+                f"https://pypi.org/pypi/{pkg}/json",
+                headers={"User-Agent": f"CastPolish/{__version__}"},
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read())
+            ver = data["info"]["version"]
+            with _pypi_cache_lock:
+                _pypi_cache[pkg] = (ver, time.time())
+        except Exception:
+            pass
+        finally:
+            with _pypi_cache_lock:
+                _pypi_cache.pop(f"__fetching_{pkg}", None)
+
+    threading.Thread(target=_fetch, daemon=True).start()
+    return entry[0] if entry else None
+
+
+# ─── Package install helpers ──────────────────────────────────────────────────
+
+def _pip_install(packages: list, log=None, upgrade: bool = False) -> None:
+    """Install or upgrade *packages* using this interpreter's pip.
+    Streams output lines to *log* callback."""
+    cmd = [sys.executable, "-m", "pip", "install"]
+    if upgrade:
+        cmd.append("--upgrade")
+    cmd.extend(packages)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT, text=True)
+    for line in proc.stdout:
+        line = line.rstrip()
+        if line and log:
+            log(line)
+    proc.wait()
+    if proc.returncode != 0:
+        raise RuntimeError(f"pip install failed (exit {proc.returncode})")
+
+
+def _install_deepfilternet_venv(log=None) -> None:
+    """Create an isolated venv at ~/.castpolish/df_venv/ and install deepfilternet.
+    Uses Rust/cargo if available (required for first-time install)."""
+    import venv as _venv
+
+    venv_dir = _DF_VENV_DIR
+    if log:
+        log(f"Creating virtual environment at {venv_dir} …")
+    _venv.create(str(venv_dir), with_pip=True, clear=True)
+
+    pip_bin = str(venv_dir / "bin" / "pip")
+
+    if log:
+        log("Upgrading pip in venv…")
+    subprocess.run([pip_bin, "install", "--upgrade", "pip"],
+                   capture_output=True, check=False)
+
+    if log:
+        log("Installing deepfilternet (requires Rust — may take 5–15 min on first run)…")
+    cargo_env = Path.home() / ".cargo" / "env"
+    if cargo_env.exists():
+        cmd = f'source "{cargo_env}" && "{pip_bin}" install deepfilternet'
+        proc = subprocess.Popen(["bash", "-c", cmd],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True)
+    else:
+        proc = subprocess.Popen([pip_bin, "install", "deepfilternet"],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True)
+    for line in proc.stdout:
+        line = line.rstrip()
+        if line and log:
+            log(line)
+    proc.wait()
+    if proc.returncode != 0:
+        raise RuntimeError(f"deepfilternet install failed (exit {proc.returncode})")
+    if log:
+        log("✓ DeepFilterNet installed in isolated venv.")
+
+
+def _upgrade_deepfilternet_venv(log=None) -> None:
+    """Upgrade deepfilternet in the existing isolated venv."""
+    pip_bin = str(_DF_VENV_DIR / "bin" / "pip")
+    cargo_env = Path.home() / ".cargo" / "env"
+    if cargo_env.exists():
+        cmd = f'source "{cargo_env}" && "{pip_bin}" install --upgrade deepfilternet'
+        proc = subprocess.Popen(["bash", "-c", cmd],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True)
+    else:
+        proc = subprocess.Popen([pip_bin, "install", "--upgrade", "deepfilternet"],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True)
+    for line in proc.stdout:
+        line = line.rstrip()
+        if line and log:
+            log(line)
+    proc.wait()
+    if proc.returncode != 0:
+        raise RuntimeError(f"deepfilternet upgrade failed (exit {proc.returncode})")
+    if log:
+        log("✓ DeepFilterNet upgraded.")
 
 
 def _ffmpeg(*args, check=True):
@@ -179,21 +301,33 @@ def _denoise_noisereduce(in_wav: str, out_wav: str, log=None):
 
 
 def _denoise_deepfilternet(in_wav: str, out_wav: str, log=None):
-    """AI speech enhancement via DeepFilterNet. Falls back to copy.
-    Model (~80 MB) is auto-downloaded to ~/.cache/DeepFilterNet3/ on first use."""
+    """AI speech enhancement via DeepFilterNet, running in its isolated venv.
+    Calls the venv Python as a subprocess to avoid numpy version conflicts.
+    Model (~80 MB) auto-downloads to ~/.cache/DeepFilterNet3/ on first use."""
     if not HAS_DEEPFILTERNET:
         shutil.copy(in_wav, out_wav)
         return
+    _script = (
+        "import sys\n"
+        "in_wav, out_wav = sys.argv[1], sys.argv[2]\n"
+        "from df.enhance import enhance, init_df, load_audio, save_audio\n"
+        "model, df_state, _ = init_df()\n"
+        "audio, _ = load_audio(in_wav, sr=df_state.sr())\n"
+        "enhanced = enhance(model, df_state, audio)\n"
+        "save_audio(out_wav, enhanced, df_state.sr())\n"
+        "print('OK')\n"
+    )
     try:
-        from df.enhance import enhance, init_df, load_audio, save_audio
         if log:
             log("Loading DeepFilterNet model (first run downloads ~80 MB)…")
-        model, df_state, _ = init_df()
-        audio, _ = load_audio(in_wav, sr=df_state.sr())
+        proc = subprocess.run(
+            [str(_DF_VENV_PYTHON), "-c", _script, in_wav, out_wav],
+            capture_output=True, text=True, timeout=300,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(proc.stderr.strip() or proc.stdout.strip())
         if log:
-            log("Applying AI speech enhancement (DeepFilterNet)…")
-        enhanced = enhance(model, df_state, audio)
-        save_audio(out_wav, enhanced, df_state.sr())
+            log("AI speech enhancement applied (DeepFilterNet).")
     except Exception as exc:
         if log:
             log(f"DeepFilterNet error ({exc}), falling back to copy")
@@ -233,9 +367,12 @@ def process_audio(input_path: str, output_audio: str,
     # These operate on a WAV file before the ffmpeg filter chain.
     if noise_mode in ("noisereduce", "deepfilternet"):
         pre_wav = os.path.join(tmp, "pre_denoise.wav")
-        # 22050 Hz mono is sufficient for voice noise reduction and runs 4× faster
-        # than 44.1 kHz stereo — noisereduce FFT cost scales with sample count
-        _ffmpeg("-i", src, "-c:a", "pcm_s16le", "-ar", "22050", "-ac", "1", pre_wav)
+        if noise_mode == "noisereduce":
+            # 22050 Hz mono — 4× fewer FFT samples, sufficient for voice NR
+            _ffmpeg("-i", src, "-c:a", "pcm_s16le", "-ar", "22050", "-ac", "1", pre_wav)
+        else:
+            # DeepFilterNet's native sample rate is 48 kHz — best quality input
+            _ffmpeg("-i", src, "-c:a", "pcm_s16le", "-ar", "48000", "-ac", "1", pre_wav)
         denoised_wav = os.path.join(tmp, "denoised.wav")
         if noise_mode == "noisereduce":
             _denoise_noisereduce(pre_wav, denoised_wav, log=log)
@@ -1206,10 +1343,23 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
 .progress-log{font-size:.72rem;color:var(--muted);margin-top:.3rem;font-style:italic}
 .empty-jobs{text-align:center;color:var(--muted);padding:2rem;font-size:.875rem}
 a{color:var(--accent2)}
-.feat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.75rem;margin-top:.75rem}
+.feat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.75rem;margin-top:.75rem}
 .feat{background:var(--surface2);border-radius:6px;padding:.75rem;font-size:.78rem}
-.feat strong{display:block;margin-bottom:.2rem;color:var(--text)}
+.feat strong{display:block;margin-bottom:.25rem;color:var(--text)}
 .feat span{color:var(--muted)}
+.mini-btn{font-size:.68rem;padding:.12rem .45rem;border-radius:4px;border:1px solid var(--border);
+  background:var(--surface);color:var(--accent);cursor:pointer;margin-left:.35rem;
+  transition:background .15s,color .15s;vertical-align:middle}
+.mini-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.mini-btn.install-btn{color:var(--warn);border-color:var(--warn)}
+.mini-btn.install-btn:hover{background:var(--warn);color:#111}
+.install-panel{background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+  padding:.9rem 1rem;margin-top:.85rem}
+.install-panel .panel-head{display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:.6rem;font-size:.82rem;font-weight:600}
+#install-log{font-size:.72rem;max-height:220px;overflow-y:auto;white-space:pre-wrap;
+  word-break:break-all;background:var(--bg);border:1px solid var(--border);border-radius:5px;
+  padding:.5rem .6rem;line-height:1.5}
 </style>
 </head>
 <body>
@@ -1347,8 +1497,19 @@ a{color:var(--accent2)}
 </div>
 
 <div class="card">
-  <h2>Dependencies</h2>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+    <h2 style="margin:0">Dependencies</h2>
+    <button class="mini-btn" style="font-size:.72rem;padding:.2rem .6rem"
+            onclick="checkUpdates(this)">Check for updates</button>
+  </div>
   <div class="feat-grid" id="deps"></div>
+  <div id="install-panel" style="display:none" class="install-panel">
+    <div class="panel-head">
+      <span>📦 Install / Update</span>
+      <button class="mini-btn" onclick="document.getElementById('install-panel').style.display='none'">✕ Close</button>
+    </div>
+    <pre id="install-log"></pre>
+  </div>
 </div>
 
 </main>
@@ -1447,11 +1608,14 @@ function renderJobs(jobs){
   el.innerHTML=html;
 }
 
+let _depsCache={};
+
 async function loadDeps(){
   const r=await fetch('/api/deps');
   const deps=await r.json();
+  _depsCache=deps;
 
-  // ── Populate noise mode dropdown from available modes ─────────────────────
+  // ── Populate noise mode dropdown ──────────────────────────────────────────
   const sel=document.getElementById('noise_mode');
   if(deps.noise_modes&&deps.noise_modes.length){
     sel.innerHTML='';
@@ -1462,15 +1626,83 @@ async function loadDeps(){
     });
   }
 
-  // ── Render deps status table (skip the noise_modes entry itself) ──────────
+  renderDeps(deps,{});
+}
+
+function renderDeps(deps,updates){
   const el=document.getElementById('deps');
   el.innerHTML=Object.entries(deps)
     .filter(([k])=>k!=='noise_modes')
-    .map(([k,v])=>`
-    <div class="feat">
-      <strong>${esc(k)}</strong>
-      <span style="color:${v.ok?'var(--success)':'var(--error)'}">${v.ok?'✓ '+esc(v.version||''):'✗ not installed'}</span>
-    </div>`).join('');
+    .map(([k,v])=>{
+      const upd=updates[k]||{};
+      const statusColor=v.ok?'var(--success)':'var(--error)';
+      const statusText=v.ok?'✓ '+(v.version||''):'✗ not installed';
+      const updateBadge=upd.update_available
+        ?`<span style="color:var(--warn);font-size:.66rem"> → ${esc(upd.latest)}</span>`
+         +`<button class="mini-btn" onclick="startInstall('${esc(k)}','update')">↑ Update</button>`
+        :'';
+      const installBtn=(!v.ok&&v.installable)
+        ?`<button class="mini-btn install-btn" onclick="startInstall('${esc(v.installable)}','install')">Install</button>`
+        :'';
+      return `<div class="feat">
+        <strong>${esc(k)}</strong>
+        <span style="color:${statusColor}">${esc(statusText)}</span>${updateBadge}${installBtn}
+      </div>`;
+    }).join('');
+}
+
+async function checkUpdates(btn){
+  const orig=btn.textContent;
+  btn.textContent='Checking…';btn.disabled=true;
+  try{
+    const r=await fetch('/api/check-updates');
+    const updates=await r.json();
+    renderDeps(_depsCache,updates);
+    btn.textContent='✓ Done';
+    setTimeout(()=>{btn.textContent=orig;btn.disabled=false;},3000);
+  }catch(e){
+    btn.textContent='Error';
+    setTimeout(()=>{btn.textContent=orig;btn.disabled=false;},2000);
+  }
+}
+
+function startInstall(pkg,action){
+  const panel=document.getElementById('install-panel');
+  const log=document.getElementById('install-log');
+  panel.style.display='block';
+  log.textContent='Starting '+action+' for '+pkg+'…\n';
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+  fetch('/api/install',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({pkg,action})
+  }).then(r=>r.json()).then(d=>{
+    if(d.iid)pollInstall(d.iid);
+    else log.textContent+='Error: '+JSON.stringify(d)+'\n';
+  }).catch(e=>{log.textContent+='Error: '+e+'\n';});
+}
+
+function pollInstall(iid){
+  const log=document.getElementById('install-log');
+  let lastLine=0;
+  const iv=setInterval(async()=>{
+    try{
+      const r=await fetch('/api/install/'+iid);
+      const d=await r.json();
+      const newLines=d.log.slice(lastLine);
+      if(newLines.length){
+        log.textContent+=newLines.join('\n')+'\n';
+        lastLine=d.log.length;
+        log.scrollTop=log.scrollHeight;
+      }
+      if(d.status==='done'||d.status==='error'){
+        clearInterval(iv);
+        if(d.status==='done'){
+          setTimeout(()=>loadDeps(),1200);
+        }
+      }
+    }catch(e){clearInterval(iv);}
+  },1000);
 }
 
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
@@ -1573,6 +1805,10 @@ setInterval(()=>{
 
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
+
+# Install jobs (separate dict — lightweight, no output files)
+_install_jobs: dict[str, dict] = {}
+_install_jobs_lock = threading.Lock()
 
 
 def create_job(title: str, settings: dict) -> str:
@@ -1907,6 +2143,116 @@ def make_app(output_dir: str) -> "Flask":
             save_config(updates)
         return jsonify({"ok": True})
 
+    # ── Package install endpoints ─────────────────────────────────────────────
+
+    _PKG_MAP = {
+        "noisereduce":    ["noisereduce", "soundfile"],
+        "soundfile":      ["soundfile", "noisereduce"],
+        "pyannote":       ["pyannote.audio"],
+        "faster-whisper": ["faster-whisper"],
+        "pyloudnorm":     ["pyloudnorm"],
+    }
+
+    @app.route("/api/install", methods=["POST"])
+    def api_install():
+        data    = request.get_json() or {}
+        pkg_key = data.get("pkg", "")
+        action  = data.get("action", "install")
+
+        iid = str(uuid.uuid4())
+        with _install_jobs_lock:
+            _install_jobs[iid] = {"status": "running", "log": []}
+
+        def _log(msg):
+            with _install_jobs_lock:
+                _install_jobs[iid]["log"].append(msg)
+            print(f"[install:{iid[:8]}] {msg}")
+
+        def _run():
+            try:
+                if pkg_key == "deepfilternet":
+                    if action == "update" and _DF_VENV_PYTHON.exists():
+                        _log("Upgrading DeepFilterNet in isolated venv…")
+                        _upgrade_deepfilternet_venv(_log)
+                    else:
+                        _log("Setting up isolated venv for DeepFilterNet…")
+                        _log("⚠ Requires Rust — first install may take 5–15 minutes.")
+                        _install_deepfilternet_venv(_log)
+                elif pkg_key in _PKG_MAP:
+                    packages = _PKG_MAP[pkg_key]
+                    verb = "Upgrading" if action == "update" else "Installing"
+                    _log(f"{verb}: {', '.join(packages)}")
+                    _pip_install(packages, _log, upgrade=(action == "update"))
+                else:
+                    _log(f"Unknown package key: '{pkg_key}'")
+                    with _install_jobs_lock:
+                        _install_jobs[iid]["status"] = "error"
+                    return
+                with _install_jobs_lock:
+                    _install_jobs[iid]["status"] = "done"
+                _log("✓ Complete — reload the page to see updated status.")
+            except Exception as exc:
+                _log(f"✗ Error: {exc}")
+                with _install_jobs_lock:
+                    _install_jobs[iid]["status"] = "error"
+
+        threading.Thread(target=_run, daemon=True).start()
+        return jsonify({"iid": iid})
+
+    @app.route("/api/install/<iid>")
+    def api_install_status(iid):
+        with _install_jobs_lock:
+            job = _install_jobs.get(iid)
+        if not job:
+            return jsonify({"error": "not found"}), 404
+        return jsonify(job)
+
+    @app.route("/api/check-updates")
+    def api_check_updates():
+        """Check PyPI for newer versions of installed packages (parallel, cached 24 h)."""
+        import importlib.metadata as _im
+
+        check_pkgs = {
+            "faster-whisper": (HAS_FASTER_WHISPER, "faster-whisper"),
+            "pyloudnorm":      (HAS_PYLOUDNORM,     "pyloudnorm"),
+            "soundfile":       (HAS_SOUNDFILE,       "soundfile"),
+            "noisereduce":     (HAS_NOISEREDUCE,     "noisereduce"),
+            "pyannote.audio":  (HAS_PYANNOTE,        "pyannote.audio"),
+        }
+
+        results: dict = {}
+        lock = threading.Lock()
+
+        def _check(display_key, ok, pypi_name):
+            if not ok:
+                with lock:
+                    results[display_key] = {"update_available": False}
+                return
+            try:
+                installed = _im.version(pypi_name)
+            except Exception:
+                with lock:
+                    results[display_key] = {"update_available": False}
+                return
+            latest = _pypi_latest(pypi_name)
+            with lock:
+                if latest and latest != installed:
+                    results[display_key] = {"update_available": True,
+                                            "installed": installed, "latest": latest}
+                else:
+                    results[display_key] = {"update_available": False,
+                                            "installed": installed, "latest": latest}
+
+        threads = [
+            threading.Thread(target=_check, args=(dk, ok, pn))
+            for dk, (ok, pn) in check_pkgs.items()
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=8)
+        return jsonify(results)
+
     @app.route("/api/deps")
     def api_deps():
         def ver(pkg):
@@ -1934,13 +2280,25 @@ def make_app(output_dir: str) -> "Flask":
                 "label": "AI Enhanced (DeepFilterNet — highest quality)",
             })
 
+        def pkg(ok, version, installable=None):
+            d = {"ok": ok, "version": version}
+            if installable:
+                d["installable"] = installable
+            return d
+
         return jsonify({
-            "ffmpeg":         {"ok": ffmpeg_ok,          "version": "system" if ffmpeg_ok else None},
-            "faster-whisper": {"ok": HAS_FASTER_WHISPER, "version": ver("faster-whisper")},
-            "pyloudnorm":     {"ok": HAS_PYLOUDNORM,     "version": ver("pyloudnorm")},
-            "soundfile":      {"ok": HAS_SOUNDFILE,      "version": ver("soundfile")},
-            "noisereduce":    {"ok": HAS_NOISEREDUCE,    "version": ver("noisereduce")},
-            "pyannote.audio": {"ok": HAS_PYANNOTE,       "version": ver("pyannote.audio")},
+            "ffmpeg":         pkg(ffmpeg_ok, "system" if ffmpeg_ok else None),
+            "faster-whisper": pkg(HAS_FASTER_WHISPER, ver("faster-whisper")),
+            "pyloudnorm":     pkg(HAS_PYLOUDNORM, ver("pyloudnorm")),
+            "soundfile":      pkg(HAS_SOUNDFILE, ver("soundfile"),
+                                  None if HAS_SOUNDFILE else "noisereduce"),
+            "noisereduce":    pkg(HAS_NOISEREDUCE, ver("noisereduce"),
+                                  None if HAS_NOISEREDUCE else "noisereduce"),
+            "pyannote.audio": pkg(HAS_PYANNOTE, ver("pyannote.audio"),
+                                  None if HAS_PYANNOTE else "pyannote"),
+            "deepfilternet":  pkg(HAS_DEEPFILTERNET,
+                                  "isolated venv" if HAS_DEEPFILTERNET else None,
+                                  None if HAS_DEEPFILTERNET else "deepfilternet"),
             "noise_modes":    noise_modes,
         })
 
