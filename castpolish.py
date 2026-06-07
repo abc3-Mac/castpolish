@@ -51,6 +51,104 @@ _DF_VENV_PYTHON = _DF_VENV_DIR / "bin" / "python"
 
 __version__ = "1.3.0"
 
+# Patched df/io.py — replaces torchaudio I/O (removed in torchaudio 2.2+) with soundfile.
+# Applied automatically after every deepfilternet venv install/upgrade.
+_DF_IO_PATCH = '''\
+# df/io.py — patched by CastPolish for torchaudio 2.2+ compatibility
+# (torchaudio removed torchaudio.info/load/save in 2.2+; soundfile is used instead)
+import os
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Tuple, Union
+
+import numpy as np
+import soundfile as _sf
+import torch
+from loguru import logger
+from numpy import ndarray
+from torch import Tensor
+from torchaudio.functional import resample as ta_resample
+
+from df.logger import warn_once
+from df.utils import download_file, get_cache_dir, get_git_root
+
+
+@dataclass
+class AudioMetaData:
+    sample_rate: int
+    num_frames: int
+    num_channels: int
+    bits_per_sample: int = 16
+    encoding: str = "PCM_S"
+
+
+def load_audio(
+    file: str, sr: Optional[int] = None, verbose=True, **kwargs
+) -> Tuple[Tensor, AudioMetaData]:
+    data, orig_sr = _sf.read(file, always_2d=True, dtype="float32")
+    audio = torch.from_numpy(data.T).contiguous()
+    meta = AudioMetaData(sample_rate=orig_sr, num_frames=audio.shape[-1],
+                         num_channels=audio.shape[0])
+    if sr is not None and orig_sr != sr:
+        if verbose:
+            warn_once(f"Resampling {orig_sr} -> {sr} Hz")
+        audio = resample(audio, orig_sr, sr)
+    return audio.contiguous(), meta
+
+
+def save_audio(
+    file: str,
+    audio: Union[Tensor, ndarray],
+    sr: int,
+    output_dir: Optional[str] = None,
+    suffix: Optional[str] = None,
+    log: bool = False,
+    dtype=torch.int16,
+):
+    outpath = file
+    if suffix is not None:
+        fn, ext = os.path.splitext(file)
+        outpath = fn + f"_{suffix}" + ext
+    if output_dir is not None:
+        outpath = os.path.join(output_dir, os.path.basename(outpath))
+    if log:
+        logger.info(f"Saving audio file \\'{outpath}\\'")
+    audio = torch.as_tensor(audio)
+    if audio.ndim == 1:
+        audio = audio.unsqueeze(0)
+    arr = audio.cpu().numpy().T.astype(np.float32)
+    _sf.write(outpath, arr, sr, subtype="FLOAT")
+
+
+def get_resample_params(method: str) -> Dict[str, Any]:
+    params = {
+        "sinc_fast":  {"resampling_method": "sinc_interpolation", "lowpass_filter_width": 16},
+        "sinc_best":  {"resampling_method": "sinc_interpolation", "lowpass_filter_width": 64},
+        "kaiser_fast": {"resampling_method": "kaiser_window", "lowpass_filter_width": 16,
+                        "rolloff": 0.85, "beta": 8.555504641634386},
+        "kaiser_best": {"resampling_method": "kaiser_window", "lowpass_filter_width": 16,
+                        "rolloff": 0.9475937167399596, "beta": 14.769656459379492},
+    }
+    assert method in params, f"method must be one of {list(params)}"
+    return params[method]
+
+
+def resample(audio: Tensor, orig_sr: int, new_sr: int, method="sinc_fast"):
+    return ta_resample(audio, orig_sr, new_sr, **get_resample_params(method))
+
+
+def get_test_sample(sr: int = 48000) -> Tensor:
+    d = get_git_root()
+    fp = os.path.join("assets", "clean_freesound_33711.wav")
+    if d is None:
+        path = download_file(
+            "https://github.com/Rikorose/DeepFilterNet/raw/main/" + fp,
+            get_cache_dir())
+    else:
+        path = os.path.join(d, fp)
+    sample, _ = load_audio(path, sr=sr)
+    return sample
+'''
+
 
 def load_config() -> dict:
     try:
@@ -225,8 +323,38 @@ def _install_deepfilternet_venv(log=None) -> None:
     proc.wait()
     if proc.returncode != 0:
         raise RuntimeError(f"deepfilternet install failed (exit {proc.returncode})")
+    # soundfile is needed by our torchaudio compatibility patch
+    if log:
+        log("Installing soundfile into venv…")
+    subprocess.run([pip_bin, "install", "soundfile"],
+                   capture_output=True, check=False)
+    _apply_df_io_patch(log)
     if log:
         log("✓ DeepFilterNet installed in isolated venv.")
+
+
+def _apply_df_io_patch(log=None) -> None:
+    """Write the soundfile-based df/io.py patch into the venv.
+    Called after every install/upgrade to handle torchaudio 2.2+ API removal."""
+    try:
+        result = subprocess.run(
+            [str(_DF_VENV_PYTHON), "-c",
+             "import df, os; print(os.path.dirname(df.__file__))"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            if log:
+                log("Warning: could not locate df package to apply patch.")
+            return
+        df_dir = result.stdout.strip()
+        io_path = os.path.join(df_dir, "io.py")
+        with open(io_path, "w") as fh:
+            fh.write(_DF_IO_PATCH)
+        if log:
+            log("Applied torchaudio 2.2+ compatibility patch to df/io.py.")
+    except Exception as exc:
+        if log:
+            log(f"Warning: patch failed ({exc}) — deepfilternet may not work.")
 
 
 def _upgrade_deepfilternet_venv(log=None) -> None:
@@ -249,6 +377,7 @@ def _upgrade_deepfilternet_venv(log=None) -> None:
     proc.wait()
     if proc.returncode != 0:
         raise RuntimeError(f"deepfilternet upgrade failed (exit {proc.returncode})")
+    _apply_df_io_patch(log)
     if log:
         log("✓ DeepFilterNet upgraded.")
 
@@ -311,26 +440,34 @@ def _denoise_deepfilternet(in_wav: str, out_wav: str, log=None):
         "import sys\n"
         "in_wav, out_wav = sys.argv[1], sys.argv[2]\n"
         "from df.enhance import enhance, init_df, load_audio, save_audio\n"
+        "# DeepFilterNet uses numpy internally so MPS is not supported; CPU is fast\n"
         "model, df_state, _ = init_df()\n"
+        "print(f'DeepFilterNet3 running on CPU (48 kHz, model sr={df_state.sr()})')\n"
         "audio, _ = load_audio(in_wav, sr=df_state.sr())\n"
         "enhanced = enhance(model, df_state, audio)\n"
         "save_audio(out_wav, enhanced, df_state.sr())\n"
-        "print('OK')\n"
+        "print('DeepFilterNet enhancement complete.')\n"
     )
     try:
         if log:
-            log("Loading DeepFilterNet model (first run downloads ~80 MB)…")
+            log("Starting DeepFilterNet3 (loading model…)")
         proc = subprocess.run(
             [str(_DF_VENV_PYTHON), "-c", _script, in_wav, out_wav],
-            capture_output=True, text=True, timeout=300,
+            capture_output=True, text=True, timeout=600,
         )
-        if proc.returncode != 0:
-            raise RuntimeError(proc.stderr.strip() or proc.stdout.strip())
+        # Forward subprocess stdout lines to the job log
         if log:
-            log("AI speech enhancement applied (DeepFilterNet).")
+            for line in proc.stdout.splitlines():
+                line = line.strip()
+                if line:
+                    log(f"  [DF] {line}")
+        if proc.returncode != 0:
+            err = (proc.stderr.strip() or proc.stdout.strip() or
+                   f"exit {proc.returncode}")
+            raise RuntimeError(err)
     except Exception as exc:
         if log:
-            log(f"DeepFilterNet error ({exc}), falling back to copy")
+            log(f"DeepFilterNet error: {exc} — falling back to copy")
         shutil.copy(in_wav, out_wav)
 
 
