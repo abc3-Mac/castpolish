@@ -37,9 +37,10 @@ echo ""
 # ── Helper: yes/no prompt ─────────────────────────────────────────────────────
 ask() {
   # ask "Question text" → returns 0 for yes, 1 for no
+  # Uses regex instead of ${,,} — compatible with macOS bash 3.2
   local prompt="${1} [y/N]: "
   read -r -p "$(echo -e "${YELLOW}  ?  ${prompt}${RESET}")" ans
-  [[ "${ans,,}" =~ ^y(es)?$ ]]
+  [[ "$ans" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
