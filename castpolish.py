@@ -233,8 +233,9 @@ def process_audio(input_path: str, output_audio: str,
     # These operate on a WAV file before the ffmpeg filter chain.
     if noise_mode in ("noisereduce", "deepfilternet"):
         pre_wav = os.path.join(tmp, "pre_denoise.wav")
-        # Convert source to 44.1 kHz stereo PCM WAV — preserves quality, soundfile-friendly
-        _ffmpeg("-i", src, "-c:a", "pcm_s16le", "-ar", "44100", pre_wav)
+        # 22050 Hz mono is sufficient for voice noise reduction and runs 4× faster
+        # than 44.1 kHz stereo — noisereduce FFT cost scales with sample count
+        _ffmpeg("-i", src, "-c:a", "pcm_s16le", "-ar", "22050", "-ac", "1", pre_wav)
         denoised_wav = os.path.join(tmp, "denoised.wav")
         if noise_mode == "noisereduce":
             _denoise_noisereduce(pre_wav, denoised_wav, log=log)
@@ -1939,7 +1940,6 @@ def make_app(output_dir: str) -> "Flask":
             "pyloudnorm":     {"ok": HAS_PYLOUDNORM,     "version": ver("pyloudnorm")},
             "soundfile":      {"ok": HAS_SOUNDFILE,      "version": ver("soundfile")},
             "noisereduce":    {"ok": HAS_NOISEREDUCE,    "version": ver("noisereduce")},
-            "deepfilternet":  {"ok": HAS_DEEPFILTERNET,  "version": ver("deepfilternet")},
             "pyannote.audio": {"ok": HAS_PYANNOTE,       "version": ver("pyannote.audio")},
             "noise_modes":    noise_modes,
         })
