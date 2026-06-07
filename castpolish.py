@@ -1732,6 +1732,7 @@ function renderJobs(jobs){
       +` <a class="job-link" href="/download/${j.id}/html">HTML</a>`
       +` <a class="job-link" href="/download/${j.id}/json">JSON</a>`
       +` <a class="job-link" href="/download/${j.id}/vtt">VTT</a>`
+      +` <a class="job-link" href="/download/${j.id}/log">Log</a>`
       :'—';
     html+=`<tr>
       <td>${esc(j.title||j.id.slice(0,8))}</td>
@@ -2000,7 +2001,13 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
     if fmt not in ("mp3", "mp4"):
         fmt = "mp3"
 
+    _start_time = time.time()
+    _pipeline_log: list[str] = []   # collected for the on-disk log file
+
     def log(msg: str):
+        elapsed = time.time() - _start_time
+        mins, secs = divmod(int(elapsed), 60)
+        _pipeline_log.append(f"[{mins:02d}:{secs:02d}]  {msg}")
         job_log(job_id, msg) if job_id else print(msg)
 
     log(f"Processing: {Path(input_path).name}")
@@ -2104,7 +2111,81 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
     outputs["html"] = html_path
 
     log(f"Done — {len(raw_segs)} segments, {len(chapters)} chapters.")
-    log(f"Outputs: {safe_stem}.{fmt}  |  .vtt  |  .json  |  .html")
+
+    # ── 7. Write processing log file ─────────────────────────────────────────
+    total_secs = time.time() - _start_time
+    tm, ts = divmod(int(total_secs), 60)
+
+    try:
+        input_size_mb = os.path.getsize(input_path) / (1024 * 1024)
+    except OSError:
+        input_size_mb = 0.0
+    dur_m, dur_s = divmod(int(duration or 0), 60)
+
+    _noise_labels = {
+        "none":         "None",
+        "afftdn":       "Standard (ffmpeg afftdn)",
+        "noisereduce":  "Dynamic (noisereduce)",
+        "deepfilternet":"AI Enhanced (DeepFilterNet3)",
+    }
+    noise_label = _noise_labels.get(
+        settings.get("noise_mode", "none"),
+        settings.get("noise_mode", "none"),
+    )
+    lufs_val = settings.get("lufs", -16.0)
+    normalize = settings.get("normalize", True)
+    transcribe_only = settings.get("transcribe_only", False)
+    model_name = settings.get("model", "small")
+    lang = settings.get("language") or "auto-detect"
+    task = settings.get("task", "transcribe")
+    diarize_on = settings.get("diarize", False)
+
+    sep = "═" * 62
+    log_lines = [
+        sep,
+        f"  CastPolish v{__version__}  —  Processing Log",
+        f"  Generated : {time.strftime('%Y-%m-%d %H:%M:%S')}",
+        sep,
+        "",
+        "  INPUT",
+        f"    File        :  {Path(input_path).name}",
+        f"    Duration    :  {dur_m}:{dur_s:02d}",
+        f"    Size        :  {input_size_mb:.1f} MB",
+        "",
+        "  SETTINGS",
+        f"    Noise mode  :  {noise_label}",
+        f"    Normalize   :  {'Yes  →  target ' + str(lufs_val) + ' LUFS (EBU R128)' if normalize else 'No'}",
+        f"    Transcribe  :  {'Skipped (transcribe-only mode)' if transcribe_only else 'Yes  (model: ' + model_name + ', task: ' + task + ', language: ' + lang + ')'}",
+        f"    Diarization :  {'Yes' if diarize_on else 'No'}",
+        f"    Output fmt  :  {fmt.upper()}",
+        "",
+        "  PROCESSING STEPS",
+    ]
+    for line in _pipeline_log:
+        log_lines.append(f"    {line}")
+    log_lines += [
+        "",
+        "  OUTPUT FILES",
+    ]
+    for key, fpath in outputs.items():
+        try:
+            fsize = os.path.getsize(fpath) / (1024 * 1024)
+            log_lines.append(f"    {Path(fpath).name:<40}  {fsize:.1f} MB")
+        except OSError:
+            log_lines.append(f"    {Path(fpath).name}")
+    log_lines += [
+        "",
+        f"  Total processing time :  {tm}:{ts:02d}",
+        sep,
+        "",
+    ]
+
+    log_path = os.path.join(output_dir, safe_stem + ".log")
+    with open(log_path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(log_lines))
+    outputs["log"] = log_path
+    log(f"Processing log saved → {safe_stem}.log")
+
     return outputs
 
 
