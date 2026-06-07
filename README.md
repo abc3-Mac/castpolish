@@ -1,207 +1,270 @@
 # CastPolish
 
-A local, open-source alternative to Auphonic for podcast and audio post-production. CastPolish runs entirely on your Mac — no cloud, no subscription, no audio ever leaves your machine.
+A local, open-source alternative to Auphonic for podcast and audio post-production.  
+Runs entirely on your machine — no cloud, no subscription, no audio ever leaves your device.
 
-![CastPolish web UI](https://img.shields.io/badge/platform-macOS-blue) ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue) ![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![macOS](https://img.shields.io/badge/macOS-full_support-brightgreen)
+![Linux](https://img.shields.io/badge/Linux-supported-green)
+![Windows](https://img.shields.io/badge/Windows-supported-green)
 
 ![Process Audio UI](screenshots/process-audio.png)
 ![Settings & Dependencies](screenshots/settings.png)
 
 ---
 
-## What it does
+## Platform support
 
-- **Audio processing** — highpass filter, compression, limiting, and two-pass EBU R128 loudness normalization (targets −16 LUFS, podcast standard)
-- **Noise reduction** — optional ffmpeg `afftdn` FFT noise reduction (checkbox in UI)
-- **Transcription** — [faster-whisper](https://github.com/guillaumekientz/faster-whisper) with word-level timestamps, exported as HTML, WebVTT captions, and Auphonic-compatible JSON
-- **AI shownotes** — chapter titles, long summary, brief summary, and suggested tags via [Ollama](https://ollama.com) (local LLM, no API key needed)
-- **Speaker diarization** — optional, via pyannote.audio (requires HuggingFace token)
-- **macOS app** — one-click `.app` launcher with Dock icon
+| Feature | macOS | Linux | Windows |
+|---|:---:|:---:|:---:|
+| Web UI (`castpolish.py serve`) | ✅ | ✅ | ✅ |
+| Audio processing & loudness normalization | ✅ | ✅ | ✅ |
+| Whisper transcription | ✅ | ✅ | ✅ |
+| Tiered noise reduction (afftdn / noisereduce / DeepFilterNet) | ✅ | ✅ | ✅ |
+| AI shownotes via Ollama | ✅ | ✅ | ✅ |
+| Speaker diarization (pyannote.audio) | ✅ | ✅ | ✅ |
+| In-app install / update buttons | ✅ | ✅ | ✅ |
+| Processing log file | ✅ | ✅ | ✅ |
+| `install.command` one-click installer | ✅ | — | — |
+| `create_macos_app.py` native `.app` launcher | ✅ | — | — |
+
+Linux and Windows users run `python3 castpolish.py serve` directly and open `http://localhost:8765` — no `.app` needed. All audio processing, transcription, and AI features are fully cross-platform.
 
 ---
 
-## Requirements
+## What it does
 
-| Dependency | Install |
-|---|---|
-| Python 3.10+ | [python.org](https://www.python.org/downloads/) |
-| ffmpeg | `brew install ffmpeg` |
-| Ollama (optional, for shownotes) | [ollama.com](https://ollama.com) |
+- **EBU R128 loudness normalization** — two-pass measurement and linear correction to a configurable target (default −16 LUFS, podcast standard)
+- **Tiered noise reduction** — three levels, each only appears if its package is installed:
+  - *Standard* — ffmpeg `afftdn` (always available, fast)
+  - *Dynamic* — [noisereduce](https://github.com/timsainburg/noisereduce) spectral subtraction (adapts over time)
+  - *AI Enhanced* — [DeepFilterNet3](https://github.com/Rikorose/DeepFilterNet) neural speech enhancement (highest quality, runs in an isolated venv)
+- **Whisper transcription** — word-level timestamps via [faster-whisper](https://github.com/guillaumekientz/faster-whisper), exported as HTML, WebVTT, and Auphonic-compatible JSON
+- **AI shownotes** — chapter titles, long summary, brief summary, and tags via [Ollama](https://ollama.com) (local LLM, no API key)
+- **Speaker diarization** — who said what, via pyannote.audio (requires free HuggingFace token)
+- **Processing log** — a `.log` file saved alongside every output detailing all settings, processing steps with timestamps, loudness measurements, and output file sizes
+- **In-app install buttons** — install missing optional packages (noisereduce, pyannote.audio, DeepFilterNet) directly from the Dependencies panel without touching a terminal
+- **macOS `.app` launcher** — native app with Dock icon and branded icon (macOS only)
 
 ---
 
 ## Quick start
 
+### macOS (easiest — double-click installer)
+
+1. Clone or download the repo
+2. Double-click **`install.command`** in Finder
+3. Follow the prompts — it installs Homebrew, ffmpeg, Python packages, and optionally builds the `.app`
+
+### All platforms (manual)
+
 ```bash
-# 1. Clone the repo
+# 1. Install ffmpeg (required)
+#   macOS:   brew install ffmpeg
+#   Ubuntu:  sudo apt install ffmpeg
+#   Windows: https://ffmpeg.org/download.html
+
+# 2. Clone and install
 git clone https://github.com/abc3-Mac/castpolish.git
 cd castpolish
+pip install flask flask-cors pyloudnorm soundfile noisereduce numpy
 
-# 2. Install Python dependencies
-python3 castpolish.py setup
+# 3. Optional: Whisper transcription
+pip install faster-whisper
 
-# 3. Start the server
+# 4. Start
 python3 castpolish.py serve
-
-# 4. Open http://localhost:8765 in your browser
+# Open http://localhost:8765
 ```
 
 ---
 
-## macOS App (optional)
+## install.command (macOS)
 
-Build a native `.app` with a Dock icon that launches the server with a double-click:
+Double-click `install.command` in Finder for a guided setup. It is **idempotent** — safe to run on a fresh machine or to update an existing install.
 
-```bash
-python3 create_macos_app.py
-```
-
-Then drag `CastPolish.app` to your Applications folder or Dock.
-
-> The app bundles `castpolish.py` internally and works from any location. It does not require the source folder to remain in place after the app is built.
+Steps it handles:
+1. Homebrew
+2. ffmpeg
+3. Python 3.10+
+4. `git pull` (or fresh clone if not yet installed)
+5. Core pip packages
+6. Optional: faster-whisper, Ollama + llama3.2, pyannote.audio, DeepFilterNet venv
+7. Build `CastPolish.app` and optionally copy to `/Applications`
 
 ---
 
-## Command-line usage
+## Optional packages
 
-### Start the web server
+All optional packages can be installed from the **Dependencies panel** in the web UI (click **Install** next to any missing package), or manually:
 
-```bash
-python3 castpolish.py serve
-python3 castpolish.py serve --port 9000
-python3 castpolish.py serve --output-dir ~/Desktop/podcast-output
+| Package | Feature | Install |
+|---|---|---|
+| `faster-whisper` | Whisper transcription | `pip install faster-whisper` |
+| `noisereduce` + `soundfile` | Dynamic noise reduction | `pip install noisereduce soundfile` |
+| `pyannote.audio` | Speaker diarization | `pip install pyannote.audio` |
+| DeepFilterNet | AI noise reduction | Install button in UI (builds isolated venv) |
+| Ollama | AI shownotes | [ollama.com](https://ollama.com) → `ollama pull llama3.2` |
+
+The web UI automatically shows only the noise reduction modes whose packages are installed — nothing breaks if a package is missing.
+
+---
+
+## DeepFilterNet (AI noise reduction)
+
+DeepFilterNet runs in a dedicated virtual environment at `~/.castpolish/df_venv/` to avoid a numpy version conflict with pyannote.audio. This happens automatically — click **Install** in the Dependencies panel and CastPolish handles everything including the Rust compiler if needed.
+
+- Native sample rate: 48 kHz (CastPolish pre-converts your file automatically)
+- Runs on CPU — ~10–60× real-time on Apple Silicon
+- Model (~80 MB) downloads to `~/.cache/DeepFilterNet/` on first use
+
+---
+
+## Processing log
+
+Every completed job writes a `{title}.log` file alongside the audio, VTT, JSON, and HTML outputs:
+
+```
+══════════════════════════════════════════════════════════════
+  CastPolish v1.3.0  —  Processing Log
+  Generated : 2026-06-07 15:09:41
+══════════════════════════════════════════════════════════════
+
+  INPUT
+    File        :  My Episode.m4a
+    Duration    :  13:44
+    Size        :  12.7 MB
+
+  SETTINGS
+    Noise mode  :  AI Enhanced (DeepFilterNet3)
+    Normalize   :  Yes  →  target -16.0 LUFS (EBU R128)
+    Transcribe  :  Yes  (model: small, task: transcribe, language: auto-detect)
+    Diarization :  No
+    Output fmt  :  MP3
+
+  PROCESSING STEPS
+    [00:00]  Processing: My Episode.m4a
+    [00:13]  DeepFilterNet enhancement complete.
+    [00:23]  Applying loudness correction (pass 2/2, -32.3 → -16.0 LUFS)…
+    ...
+
+  Total processing time :  2:00
+══════════════════════════════════════════════════════════════
 ```
 
-### Process a file directly (no browser needed)
-
-```bash
-python3 castpolish.py process "episode.mp3"
-
-python3 castpolish.py process "episode.mp3" \
-  --model small \          # tiny | base | small | medium | large-v2
-  --format mp3 \           # mp3 or mp4 (aac)
-  --language en \
-  --task transcribe \      # transcribe | translate (translate → English)
-  --lufs -16 \             # target loudness in LUFS
-  --title "Episode Title" \
-  --output-dir ~/my-output \
-  --denoise \              # enable ffmpeg afftdn noise reduction
-  --no-normalize           # skip loudness normalization
-```
-
-### Batch processing
-
-```bash
-for f in ~/Podcasts/*.mp3; do
-    python3 /path/to/castpolish.py process "$f" --model small
-done
-```
+A **Log** download link appears in the results table alongside Audio / HTML / JSON / VTT.
 
 ---
 
 ## Output files
 
-Each processed file gets its own folder named after the audio file:
+Each processed file produces a folder named after the audio:
 
 ```
 ~/CastPolish-output/
-  my-episode/
-    my-episode.mp3          # processed audio
-    my-episode.html         # transcript with chapters, summaries, audio player
-    my-episode.vtt          # WebVTT captions (YouTube-compatible)
-    my-episode.json         # Auphonic-compatible transcript JSON
+  My-Episode/
+    My Episode.mp3     ← improved audio (−16 LUFS)
+    My Episode.html    ← interactive transcript editor with audio player
+    My Episode.vtt     ← WebVTT captions (YouTube-compatible)
+    My Episode.json    ← Auphonic-compatible word-level transcript
+    My Episode.log     ← processing log (settings, steps, timings)
 ```
 
-If you process the same file twice, folders are named `my-episode-01`, `my-episode-02`, etc.
+---
+
+## Command-line usage
+
+```bash
+# Start the web server
+python3 castpolish.py serve
+python3 castpolish.py serve --port 9000
+python3 castpolish.py serve --output-dir ~/Desktop/podcast-output
+
+# Process a file directly (no browser needed)
+python3 castpolish.py process "episode.mp3" \
+  --model small \           # tiny | base | small | medium | large-v2
+  --format mp3 \            # mp3 or mp4 (aac)
+  --language en \
+  --lufs -16 \
+  --title "Episode Title" \
+  --output-dir ~/my-output \
+  --denoise                 # enable afftdn noise reduction
+
+# Batch processing
+for f in ~/Podcasts/*.mp3; do
+    python3 castpolish.py process "$f" --model small
+done
+```
+
+---
+
+## Speaker diarization
+
+Requires a free [HuggingFace](https://huggingface.co) account and accepting the pyannote model license:
+
+```bash
+pip install pyannote.audio
+```
+
+Enter your HuggingFace token in Settings → enable Diarization in the UI.  
+Uses Apple Metal (MPS) on Apple Silicon automatically for faster processing.
 
 ---
 
 ## AI shownotes (Ollama)
 
-Install Ollama and pull a model:
-
 ```bash
+# macOS
 brew install ollama
+ollama pull llama3.2
+
+# Linux
+curl -fsSL https://ollama.com/install.sh | sh
 ollama pull llama3.2
 ```
 
-Then enable shownotes in the web UI Settings tab, or pass `--title "Episode Title"` on the CLI. CastPolish will generate:
-- Chapter titles with timestamps
-- Long summary (~700 tokens)
-- Brief summary (~300 tokens)
-- Suggested tags
-
-Ollama runs locally — no data leaves your machine.
+CastPolish generates chapter titles, a long summary, a brief summary, and suggested tags — all locally.
 
 ---
 
-## Speaker diarization (optional)
-
-Requires a free [HuggingFace](https://huggingface.co) account and accepting the pyannote model license:
-
-```bash
-pip install pyannote.audio torch
-```
-
-Enter your HuggingFace token in Settings and enable diarization in the UI.
-
----
-
-## Performance guide
+## Performance
 
 | Hardware | `tiny` | `small` | `medium` |
 |---|---|---|---|
-| Apple Silicon (M1/M2/M3) | ~0.1× realtime | ~0.3× realtime | ~0.8× realtime |
-| Intel Mac (last gen) | ~0.5× realtime | ~1.5× realtime | ~4× realtime |
+| Apple Silicon (M-series) | ~0.1× realtime | ~0.3× realtime | ~0.8× realtime |
+| Intel Mac / Linux x86 | ~0.5× realtime | ~1.5× realtime | ~4× realtime |
 
-*"0.3× realtime" means a 60-minute file takes ~18 minutes. Apple Silicon uses Core ML acceleration.*
+*"0.3× realtime" = a 60-min file takes ~18 min. Apple Silicon uses Core ML acceleration.*
 
-For batch jobs on Intel, `--model small` is the best balance of speed and accuracy.
+**DeepFilterNet** (AI noise reduction): ~10–60× realtime on CPU (independent of Whisper model).
 
 ---
 
 ## Memory requirements
 
-The Whisper model is loaded fresh for each job and released when done — memory does not accumulate over time.
-
-**Idle (server running, no job active):** ~80 MB
-
-**Peak RAM during a job:**
-
-| Whisper model | Peak RAM |
+| Component | Peak RAM |
 |---|---|
-| tiny | ~150 MB |
-| small ✓ (default) | ~450 MB |
-| medium | ~1.2 GB |
-| large-v2 / large-v3 | ~2.5 GB |
+| Whisper tiny | ~150 MB |
+| Whisper small (default) | ~450 MB |
+| Whisper medium | ~1.2 GB |
+| Whisper large-v2/v3 | ~2.5 GB |
+| Ollama + llama3.2 | ~2 GB |
+| pyannote.audio diarization | +1–1.5 GB during pass |
+| DeepFilterNet (isolated venv) | +~500 MB during processing |
 
-*CastPolish uses `compute_type="auto"` which selects int8 quantization on CPU, cutting model memory roughly in half vs. full float16.*
-
-**Optional components (separate processes):**
-
-| Component | RAM |
-|---|---|
-| Ollama + llama3.2 | ~2 GB (always-on if Ollama is running) |
-| pyannote.audio diarization | +1–1.5 GB during diarization pass |
-
-**Practical minimums:**
-
-- **8 GB RAM** — use `small` model. Avoid running Ollama at the same time on 8 GB Intel Macs.
-- **16 GB RAM** — `medium` + Ollama simultaneously is comfortable.
-- **32 GB+ RAM** — `large-v2` with all features enabled works fine.
+**Recommended minimums:** 8 GB RAM for `small` model; 16 GB for `medium` + Ollama simultaneously.
 
 ---
 
 ## Configuration
 
-Settings are saved to `~/.castpolish/config.json`. You can also configure via the Settings tab in the web UI:
+Settings saved to `~/.castpolish/config.json`. Configure via the web UI Settings tab:
 
 - Output directory
-- Default Whisper model
-- Default audio format
 - Target loudness (LUFS)
 - Ollama host and model
-- HuggingFace token
+- HuggingFace token (for diarization)
 
 ---
 
@@ -214,7 +277,9 @@ MIT — see [LICENSE](LICENSE).
 ## Acknowledgements
 
 - [faster-whisper](https://github.com/guillaumekientz/faster-whisper) — OpenAI Whisper via CTranslate2
-- [ffmpeg](https://ffmpeg.org) — audio processing and noise reduction
+- [DeepFilterNet](https://github.com/Rikorose/DeepFilterNet) — AI speech enhancement
+- [noisereduce](https://github.com/timsainburg/noisereduce) — non-stationary noise reduction
+- [ffmpeg](https://ffmpeg.org) — audio processing
 - [Ollama](https://ollama.com) — local LLM inference
 - [Flask](https://flask.palletsprojects.com) — local web server
 - Inspired by [Auphonic](https://auphonic.com)
