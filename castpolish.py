@@ -455,12 +455,16 @@ def _denoise_deepfilternet(in_wav: str, out_wav: str, log=None):
             [str(_DF_VENV_PYTHON), "-c", _script, in_wav, out_wav],
             capture_output=True, text=True, timeout=600,
         )
-        # Forward subprocess stdout lines to the job log
+        # Forward subprocess stdout lines to the job log,
+        # stripping loguru's "YYYY-MM-DD HH:MM:SS | LEVEL | DF | " prefix
         if log:
+            _df_prefix = re.compile(
+                r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \| \w+\s*\| DF \| "
+            )
             for line in proc.stdout.splitlines():
                 line = line.strip()
                 if line:
-                    log(f"  [DF] {line}")
+                    log(f"  [DF] {_df_prefix.sub('', line)}")
         if proc.returncode != 0:
             err = (proc.stderr.strip() or proc.stdout.strip() or
                    f"exit {proc.returncode}")
@@ -2141,6 +2145,8 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
     diarize_on = settings.get("diarize", False)
 
     sep = "═" * 62
+    display_filename = settings.get("original_filename") or Path(input_path).name
+
     log_lines = [
         sep,
         f"  CastPolish v{__version__}  —  Processing Log",
@@ -2148,7 +2154,7 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
         sep,
         "",
         "  INPUT",
-        f"    File        :  {Path(input_path).name}",
+        f"    File        :  {display_filename}",
         f"    Duration    :  {dur_m}:{dur_s:02d}",
         f"    Size        :  {input_size_mb:.1f} MB",
         "",
@@ -2249,6 +2255,7 @@ def make_app(output_dir: str) -> "Flask":
         safe_name = re.sub(r'[<>:"/\\|?*]', "_", f.filename or "audio")
         upload_path = os.path.join(job_dir, "_upload_" + safe_name)
         f.save(upload_path)
+        settings["original_filename"] = f.filename or safe_name   # for the log file
 
         def worker():
             with _jobs_lock:
