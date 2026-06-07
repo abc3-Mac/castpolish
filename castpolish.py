@@ -907,21 +907,29 @@ def generate_chapter_titles_ollama(chapters_segs: list[tuple],
         text = " ".join(excerpt)
 
         prompt = (
-            "You are creating chapter markers for a podcast or video transcript.\n"
-            "Write a SHORT chapter title (3 to 6 words, title case, no punctuation) "
-            "that captures the main topic of this excerpt.\n\n"
+            "You are a podcast chapter labeler.\n"
+            "Reply with ONLY the chapter title — no explanation, no options, "
+            "no numbering, no punctuation at the end.\n"
+            "Title must be 3 to 6 words, title case.\n\n"
             f"Excerpt:\n{text}\n\n"
-            "Chapter title:"
+            "Chapter title (3-6 words, reply with the title only):"
         )
         try:
             raw = ollama_generate(prompt, model, host)
-            # Strip quotes, leading/trailing whitespace, trailing punctuation
+            # Strip quotes, whitespace, trailing punctuation
             title = raw.strip().strip('"\'').rstrip(".,:;!?")
-            # If the model returned multiple lines, take the first
-            title = title.splitlines()[0].strip()
+            # Take only the first non-empty line
+            title = next((ln.strip() for ln in title.splitlines() if ln.strip()), "")
+            # Reject meta-responses: "Here are", numbered lists, overly long answers
+            _bad = ("here are", "option", "title:", "chapter title")
+            if (not title
+                    or len(title.split()) > 9
+                    or any(title.lower().startswith(b) for b in _bad)
+                    or title[0].isdigit()):
+                title = _chapter_title_fallback(segs)
             if log:
                 log(f"  Chapter {idx + 1}: {title}")
-            titles.append(title or _chapter_title_fallback(segs))
+            titles.append(title)
         except Exception as exc:
             if log:
                 log(f"  Ollama error on chapter {idx + 1}: {exc}")
@@ -2007,6 +2015,7 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
 
     _start_time = time.time()
     _pipeline_log: list[str] = []   # collected for the on-disk log file
+    _display_filename = settings.get("original_filename") or Path(input_path).name
 
     def log(msg: str):
         elapsed = time.time() - _start_time
@@ -2014,7 +2023,7 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
         _pipeline_log.append(f"[{mins:02d}:{secs:02d}]  {msg}")
         job_log(job_id, msg) if job_id else print(msg)
 
-    log(f"Processing: {Path(input_path).name}")
+    log(f"Processing: {_display_filename}")
     log(f"Output dir: {output_dir}")
 
     # ── 1. Audio processing ──────────────────────────────────────────────────
@@ -2145,8 +2154,6 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
     diarize_on = settings.get("diarize", False)
 
     sep = "═" * 62
-    display_filename = settings.get("original_filename") or Path(input_path).name
-
     log_lines = [
         sep,
         f"  CastPolish v{__version__}  —  Processing Log",
@@ -2154,7 +2161,7 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
         sep,
         "",
         "  INPUT",
-        f"    File        :  {display_filename}",
+        f"    File        :  {_display_filename}",
         f"    Duration    :  {dur_m}:{dur_s:02d}",
         f"    Size        :  {input_size_mb:.1f} MB",
         "",
