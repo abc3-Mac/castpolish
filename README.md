@@ -37,6 +37,8 @@ Linux and Windows users run `python3 castpolish.py serve` directly and open `htt
 
 ## What it does
 
+- **Quality presets** — one click sets the right model and noise reduction: ⚡ *Quick draft* (fast review copy), 🎙️ *Production* (publication quality), 🎯 *High accuracy* (when exact wording matters — legal, theological, medical; pairs with vocabulary hints)
+- **Vocabulary hints** — list names and domain terms (e.g. "Lutheran Church—Missouri Synod") and Whisper transcribes them dramatically more reliably
 - **EBU R128 loudness normalization** — two-pass measurement and linear correction to a configurable target (default −16 LUFS, podcast standard)
 - **Tiered noise reduction** — three levels, each only appears if its package is installed:
   - *Standard* — ffmpeg `afftdn` (always available, fast)
@@ -186,7 +188,7 @@ python3 castpolish.py serve --output-dir ~/Desktop/podcast-output
 
 # Process a file directly (no browser needed)
 python3 castpolish.py process "episode.mp3" \
-  --model small \           # tiny | base | small | medium | large-v2
+  --model small \           # tiny | base | small | medium | large-v2 | large-v3 | large-v3-turbo
   --format mp3 \            # mp3 or mp4 (aac)
   --language en \
   --lufs -16 \

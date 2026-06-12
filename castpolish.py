@@ -15,6 +15,7 @@ import argparse
 import json
 import math
 import os
+import queue
 import re
 import shutil
 import subprocess
@@ -49,7 +50,7 @@ CONFIG_FILE     = CONFIG_DIR / "config.json"
 _DF_VENV_DIR    = CONFIG_DIR / "df_venv"
 _DF_VENV_PYTHON = _DF_VENV_DIR / "bin" / "python"
 
-__version__ = "1.3.1"
+__version__ = "1.4.0"
 
 # Patched df/io.py — replaces torchaudio I/O (removed in torchaudio 2.2+) with soundfile.
 # Applied automatically after every deepfilternet venv install/upgrade.
@@ -150,19 +151,38 @@ def get_test_sample(sr: int = 48000) -> Tensor:
 '''
 
 
+_config_lock = threading.Lock()
+
+
 def load_config() -> dict:
     try:
         return json.loads(CONFIG_FILE.read_text())
+    except FileNotFoundError:
+        return {}
     except Exception:
+        # Corrupt config: move it aside instead of silently returning {} —
+        # the next save_config would otherwise rewrite the file from empty,
+        # permanently losing the HF token and Ollama settings.
+        try:
+            backup = CONFIG_FILE.with_suffix(".json.corrupt")
+            CONFIG_FILE.rename(backup)
+            print(f"⚠️ Corrupt config moved to {backup}")
+        except OSError:
+            pass
         return {}
 
 
 def save_config(data: dict):
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    # Merge with existing so we never clobber unrelated keys
-    cfg = load_config()
-    cfg.update(data)
-    CONFIG_FILE.write_text(json.dumps(cfg, indent=2))
+    # Lock: two concurrent saves would read-merge-write over each other and
+    # silently drop keys. Temp-file + os.replace: a crash mid-write must not
+    # truncate the only copy of the config.
+    with _config_lock:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        cfg = load_config()
+        cfg.update(data)
+        tmp = CONFIG_FILE.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(cfg, indent=2))
+        os.replace(tmp, CONFIG_FILE)
 
 # ─── Optional dependency detection ──────────────────────────────────────────
 try:
@@ -211,6 +231,44 @@ except ImportError:
 # numpy version conflicts with pyannote.audio.
 HAS_DEEPFILTERNET = _DF_VENV_PYTHON.exists()
 
+
+def _refresh_optional_deps() -> None:
+    """Re-attempt optional imports so in-app installs take effect without a
+    server restart. The flags above are evaluated once at import time; without
+    this, a package installed from the Dependencies panel stays invisible (and
+    the denoise functions silently pass audio through) until relaunch.
+    Cheap when nothing changed: installed modules hit sys.modules, and a
+    missing package fails fast."""
+    global np, HAS_NUMPY, sf, HAS_SOUNDFILE, nr, HAS_NOISEREDUCE
+    global PyannotePipeline, HAS_PYANNOTE, HAS_DEEPFILTERNET
+    import importlib
+    importlib.invalidate_caches()
+    if not HAS_NUMPY:
+        try:
+            import numpy as _np
+            np, HAS_NUMPY = _np, True
+        except ImportError:
+            pass
+    if not HAS_SOUNDFILE:
+        try:
+            import soundfile as _sf
+            sf, HAS_SOUNDFILE = _sf, True
+        except ImportError:
+            pass
+    if not HAS_NOISEREDUCE:
+        try:
+            import noisereduce as _nr
+            nr, HAS_NOISEREDUCE = _nr, True
+        except ImportError:
+            pass
+    if not HAS_PYANNOTE:
+        try:
+            from pyannote.audio import Pipeline as _PP
+            PyannotePipeline, HAS_PYANNOTE = _PP, True
+        except ImportError:
+            pass
+    HAS_DEEPFILTERNET = _DF_VENV_PYTHON.exists()
+
 # ─── Audio processing ─────────────────────────────────────────────────────────
 
 def _find_ffmpeg() -> str:
@@ -233,18 +291,20 @@ _pypi_cache: dict = {}  # {pkg: (version_str, timestamp)}
 _pypi_cache_lock = threading.Lock()
 
 
-def _pypi_latest(pkg: str) -> str | None:
+def _pypi_latest(pkg: str, wait: bool = False) -> str | None:
     """Return the latest PyPI version of *pkg*, cached for 24 h.
-    Returns None on network error or if the cache entry is stale and the
-    background refresh hasn't completed yet."""
+    With wait=False, a cold cache returns None immediately and refreshes in
+    the background. Pass wait=True from handlers that report results to the
+    user — otherwise the first "Check for updates" click always shows
+    nothing (the fetch finishes after the response is already sent)."""
     with _pypi_cache_lock:
         entry = _pypi_cache.get(pkg)
         if entry and time.time() - entry[1] < 86400:
             return entry[0]
         # Mark as fetching so we don't spawn duplicate threads
-        if _pypi_cache.get(f"__fetching_{pkg}"):
-            return entry[0] if entry else None
-        _pypi_cache[f"__fetching_{pkg}"] = True
+        already_fetching = bool(_pypi_cache.get(f"__fetching_{pkg}"))
+        if not already_fetching:
+            _pypi_cache[f"__fetching_{pkg}"] = True
 
     def _fetch():
         try:
@@ -263,7 +323,23 @@ def _pypi_latest(pkg: str) -> str | None:
             with _pypi_cache_lock:
                 _pypi_cache.pop(f"__fetching_{pkg}", None)
 
-    threading.Thread(target=_fetch, daemon=True).start()
+    t = None
+    if not already_fetching:
+        t = threading.Thread(target=_fetch, daemon=True)
+        t.start()
+    if wait:
+        if t is not None:
+            t.join(timeout=8)
+        else:
+            # Another caller's fetch is in flight; poll the cache briefly
+            deadline = time.time() + 8
+            while time.time() < deadline:
+                with _pypi_cache_lock:
+                    if not _pypi_cache.get(f"__fetching_{pkg}"):
+                        break
+                time.sleep(0.2)
+        with _pypi_cache_lock:
+            entry = _pypi_cache.get(pkg)
     return entry[0] if entry else None
 
 
@@ -432,9 +508,20 @@ def _upgrade_deepfilternet_venv(log=None) -> None:
         log("✓ DeepFilterNet upgraded.")
 
 
+# Generous ceiling: ffmpeg can stall forever on a truncated container, which
+# would leave the job "processing" with no way to cancel. Even re-encoding a
+# multi-hour file finishes well inside this.
+_FFMPEG_TIMEOUT = 4 * 3600
+
+
 def _ffmpeg(*args, check=True):
     cmd = [_FFMPEG_BIN, "-y", "-hide_banner", "-loglevel", "error"] + list(args)
-    result = subprocess.run(cmd, capture_output=True)
+    try:
+        result = subprocess.run(cmd, capture_output=True, timeout=_FFMPEG_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"ffmpeg timed out after {_FFMPEG_TIMEOUT // 3600} hours — "
+            "the input file may be corrupt or truncated")
     if check and result.returncode != 0:
         raise RuntimeError(f"ffmpeg failed: {result.stderr.decode()}")
     return result.returncode == 0
@@ -445,11 +532,24 @@ def convert_to_wav(input_path: str, out_wav: str, sample_rate: int = 16000):
     _ffmpeg("-i", input_path, "-ac", "1", "-ar", str(sample_rate), "-f", "wav", out_wav)
 
 
+def _find_ffprobe() -> str:
+    """ffprobe lives next to ffmpeg — when ffmpeg was found via the fallback
+    paths (not PATH), a bare "ffprobe" would raise FileNotFoundError."""
+    sibling = os.path.join(os.path.dirname(_FFMPEG_BIN), "ffprobe")
+    if os.path.isfile(sibling):
+        return sibling
+    return shutil.which("ffprobe") or "ffprobe"
+
+
 def get_duration(path: str) -> float:
-    result = subprocess.run(
-        ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", path],
-        capture_output=True, text=True
-    )
+    try:
+        result = subprocess.run(
+            [_find_ffprobe(), "-v", "quiet", "-print_format", "json",
+             "-show_streams", path],
+            capture_output=True, text=True, timeout=120,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return 0.0
     if result.returncode == 0:
         for s in json.loads(result.stdout).get("streams", []):
             if s.get("codec_type") == "audio":
@@ -460,17 +560,25 @@ def get_duration(path: str) -> float:
 def _denoise_noisereduce(in_wav: str, out_wav: str, log=None):
     """Non-stationary spectral noise reduction via noisereduce library.
     Preserves original sample rate and channel count. Falls back to copy."""
+    _refresh_optional_deps()
     if HAS_NOISEREDUCE and HAS_SOUNDFILE and HAS_NUMPY:
         try:
-            data, rate = sf.read(in_wav)
+            # float32 halves peak memory vs soundfile's float64 default
+            data, rate = sf.read(in_wav, dtype="float32")
             if log:
                 log("Applying dynamic noise reduction (noisereduce)…")
+            # noisereduce expects (channels, samples); soundfile gives (samples, channels)
+            multichannel = data.ndim > 1
+            if multichannel:
+                data = data.T
             # Use first 0.5 s as rough noise profile; stationary=False adapts over time
-            noise_clip = data[:max(1, rate // 2)] if len(data) > rate // 2 else data
+            noise_clip = data[..., :max(1, rate // 2)]
             reduced = nr.reduce_noise(
                 y=data, sr=rate, y_noise=noise_clip,
                 stationary=False, n_jobs=-1
             )
+            if multichannel:
+                reduced = reduced.T
             sf.write(out_wav, reduced.astype("float32"), rate)
             return
         except Exception as exc:
@@ -483,7 +591,10 @@ def _denoise_deepfilternet(in_wav: str, out_wav: str, log=None):
     """AI speech enhancement via DeepFilterNet, running in its isolated venv.
     Calls the venv Python as a subprocess to avoid numpy version conflicts.
     Model (~80 MB) auto-downloads to ~/.cache/DeepFilterNet3/ on first use."""
-    if not HAS_DEEPFILTERNET:
+    if not _DF_VENV_PYTHON.exists():
+        if log:
+            log("⚠️ DeepFilterNet venv not found — passing audio through unprocessed. "
+                "Install it from the Dependencies panel.")
         shutil.copy(in_wav, out_wav)
         return
     _script = (
@@ -501,9 +612,12 @@ def _denoise_deepfilternet(in_wav: str, out_wav: str, log=None):
     try:
         if log:
             log("Starting DeepFilterNet3 (loading model…)")
+        # Scale the ceiling with file length: a flat 600 s silently degraded
+        # long episodes to "no noise reduction" via the fallback copy below.
+        df_timeout = max(600, int(get_duration(in_wav) * 3) + 120)
         proc = subprocess.run(
             [str(_DF_VENV_PYTHON), "-c", _script, in_wav, out_wav],
-            capture_output=True, text=True, timeout=600,
+            capture_output=True, text=True, timeout=df_timeout,
         )
         # Forward subprocess stdout lines to the job log,
         # stripping loguru's "YYYY-MM-DD HH:MM:SS | LEVEL | DF | " prefix
@@ -529,7 +643,7 @@ def process_audio(input_path: str, output_audio: str,
                   fmt: str = "mp3",
                   normalize: bool = True, noise_mode: str = "none",
                   target_lufs: float = -16.0,
-                  log=None) -> str:
+                  log=None, tmp_dir: str | None = None) -> str:
     """
     Full audio improvement pipeline — runs at original quality, then exports.
     Returns path to 16kHz mono WAV for Whisper transcription.
@@ -546,7 +660,9 @@ def process_audio(input_path: str, output_audio: str,
       3. Adaptive leveling          — multiband-style compressor evens speech
       4. EBU R128 loudness norm     — broadcast-standard target level
     """
-    tmp = tempfile.mkdtemp(prefix="cp_")
+    # Caller-owned temp dir is cleaned by run_pipeline; a self-created one is
+    # cleaned only on process exit, so callers should always pass tmp_dir.
+    tmp = tmp_dir or tempfile.mkdtemp(prefix="cp_")
 
     def info(msg):
         if log:
@@ -559,8 +675,10 @@ def process_audio(input_path: str, output_audio: str,
     if noise_mode in ("noisereduce", "deepfilternet"):
         pre_wav = os.path.join(tmp, "pre_denoise.wav")
         if noise_mode == "noisereduce":
-            # 22050 Hz mono — 4× fewer FFT samples, sufficient for voice NR
-            _ffmpeg("-i", src, "-c:a", "pcm_s16le", "-ar", "22050", "-ac", "1", pre_wav)
+            # Keep original sample rate and channels — the released audio is
+            # encoded from this chain, so downsampling here would silently
+            # degrade the published file (not just the noise analysis).
+            _ffmpeg("-i", src, "-c:a", "pcm_s16le", pre_wav)
         else:
             # DeepFilterNet's native sample rate is 48 kHz — best quality input
             _ffmpeg("-i", src, "-c:a", "pcm_s16le", "-ar", "48000", "-ac", "1", pre_wav)
@@ -603,7 +721,7 @@ def process_audio(input_path: str, output_audio: str,
             [_FFMPEG_BIN, "-y", "-i", src,
              "-af", f"{pre_filters},loudnorm=I={target_lufs}:TP=-1.5:LRA=11:print_format=json",
              "-f", "null", "-"],
-            capture_output=True,
+            capture_output=True, timeout=_FFMPEG_TIMEOUT,
         )
         stderr = meas.stderr.decode("utf-8", errors="replace")
         m = _re.search(r'\{\s*"input_i".*?\}', stderr, _re.DOTALL)
@@ -645,13 +763,36 @@ def process_audio(input_path: str, output_audio: str,
 
 # ─── Transcription ────────────────────────────────────────────────────────────
 
+# Cache the most recent Whisper model: loading large-v3 is ~3 GB of disk reads
+# per job otherwise. Single entry (not a dict) so switching sizes evicts the
+# old model instead of accumulating several GB-scale models in RAM.
+_whisper_cache: dict = {"size": None, "model": None}
+_whisper_cache_lock = threading.Lock()
+
+
+def _get_whisper_model(model_size: str, info):
+    with _whisper_cache_lock:
+        if _whisper_cache["size"] == model_size and _whisper_cache["model"] is not None:
+            info(f"Whisper model '{model_size}' already loaded (cached).")
+            return _whisper_cache["model"]
+        _whisper_cache["model"] = None   # release the old model before loading
+        info(f"Loading Whisper model '{model_size}' (faster-whisper)…")
+        model = WhisperModel(model_size, device="auto", compute_type="auto")
+        _whisper_cache["size"] = model_size
+        _whisper_cache["model"] = model
+        return model
+
+
 def transcribe(wav_path: str, model_size: str = "small",
                language: str | None = None, task: str = "transcribe",
+               initial_prompt: str | None = None,
                log=None) -> tuple[list, str]:
     """
     Returns (segments, detected_language).
     Each segment: {start, end, text, words:[{word,start,end,probability}],
                    avg_logprob, no_speech_prob}
+    initial_prompt biases the vocabulary — domain terms and proper nouns
+    listed there are far more likely to be transcribed correctly.
     """
     def info(msg):
         if log:
@@ -665,13 +806,13 @@ def transcribe(wav_path: str, model_size: str = "small",
         )
 
     if HAS_FASTER_WHISPER:
-        info(f"Loading Whisper model '{model_size}' (faster-whisper)…")
-        model = WhisperModel(model_size, device="auto", compute_type="auto")
+        model = _get_whisper_model(model_size, info)
         info("Transcribing…")
         gen, info_obj = model.transcribe(
             wav_path,
             language=language,
             task=task,
+            initial_prompt=initial_prompt or None,
             word_timestamps=True,
             vad_filter=True,
             vad_parameters={"min_silence_duration_ms": 400},
@@ -701,7 +842,9 @@ def transcribe(wav_path: str, model_size: str = "small",
     info(f"Loading Whisper model '{model_size}' (openai-whisper)…")
     model = openai_whisper.load_model(model_size)
     info("Transcribing…")
-    result = model.transcribe(wav_path, language=language, task=task, word_timestamps=True)
+    result = model.transcribe(wav_path, language=language, task=task,
+                              initial_prompt=initial_prompt or None,
+                              word_timestamps=True)
     detected = result.get("language", "en")
     segs = []
     for seg in result.get("segments", []):
@@ -787,41 +930,6 @@ def mark_paragraphs(segments: list, silence_threshold: float = 1.2) -> list:
         spk_change = seg.get("speaker") != prev.get("speaker")
         seg["newpara"] = bool(gap >= silence_threshold or spk_change)
     return segments
-
-
-def detect_chapters(segments: list, duration: float,
-                    min_gap: float = 2.5,
-                    min_chapter_secs: float = 90.0) -> list:
-    """
-    Returns [[start_seconds, "Title"], ...] matching Auphonic's format.
-    Boundaries are long silences; titles come from the first sentence.
-    """
-    if not segments:
-        return []
-
-    chapters: list[list] = []
-    chapter_start = segments[0]["start"]
-    chapter_segs: list[dict] = [segments[0]]
-
-    def commit(end_seg_idx: int):
-        title = _chapter_title(chapter_segs)
-        chapters.append([chapter_start, title])
-
-    for i in range(1, len(segments)):
-        prev, curr = segments[i - 1], segments[i]
-        gap = curr["start"] - prev["end"]
-        elapsed = prev["end"] - chapter_start
-        if gap >= min_gap and elapsed >= min_chapter_secs:
-            commit(i - 1)
-            chapter_start = curr["start"]
-            chapter_segs = []
-        chapter_segs.append(curr)
-
-    # Final chapter
-    if chapter_segs:
-        chapters.append([chapter_start, _chapter_title(chapter_segs)])
-
-    return chapters
 
 
 def _chapter_title_fallback(segs: list, max_words: int = 7) -> str:
@@ -946,7 +1054,14 @@ def generate_chapter_titles_ollama(chapters_segs: list[tuple],
     Calls Ollama once per chapter — batching is avoided to keep prompts small.
     """
     titles = []
+    consecutive_failures = 0
     for idx, (start, segs) in enumerate(chapters_segs):
+        # Circuit breaker: each failed Ollama call costs up to its full
+        # timeout, serially. A long episode can have 100+ chapters — without
+        # this, a hung Ollama adds hours before the job proceeds.
+        if consecutive_failures >= 3:
+            titles.append(_chapter_title_fallback(segs))
+            continue
         # Build a ~300 word excerpt from the chapter
         words, excerpt = 0, []
         for seg in segs:
@@ -980,9 +1095,14 @@ def generate_chapter_titles_ollama(chapters_segs: list[tuple],
             if log:
                 log(f"  Chapter {idx + 1}: {title}")
             titles.append(title)
+            consecutive_failures = 0
         except Exception as exc:
+            consecutive_failures += 1
             if log:
                 log(f"  Ollama error on chapter {idx + 1}: {exc}")
+                if consecutive_failures == 3:
+                    log("  Ollama failing repeatedly — using heuristic titles "
+                        "for the remaining chapters.")
             titles.append(_chapter_title_fallback(segs))
     return titles
 
@@ -1113,9 +1233,13 @@ def to_txt(segments: list) -> str:
 
 
 def _vtt_ts(s: float) -> str:
-    h, rem = divmod(s, 3600)
-    m, sec = divmod(rem, 60)
-    return f"{int(h):02d}:{int(m):02d}:{sec:06.3f}"
+    # Quantize to integer ms BEFORE splitting: float arithmetic on values
+    # like 3599.9996 otherwise yields a seconds field of "60.000", which
+    # strict VTT parsers (YouTube included) reject.
+    ms = max(0, round(s * 1000))
+    h, rem = divmod(ms, 3_600_000)
+    m, rem = divmod(rem, 60_000)
+    return f"{h:02d}:{m:02d}:{rem / 1000:06.3f}"
 
 
 def _srt_ts(s: float) -> str:
@@ -1458,10 +1582,18 @@ def build_output_html(title: str, audio_file: str, segments: list,
         "segments": to_auphonic_json(segments),
         "shownotes": shownotes or {},
     }
+    import html as _htmlmod
+    # Escape user-controlled strings: the title lands in <title>/<h1>, and the
+    # JSON lands inside an inline <script> where a literal "<" could close the
+    # script element (e.g. "</script>") — < is the standard inline guard.
+    safe_json = (json.dumps(data, ensure_ascii=False, cls=_SafeEncoder)
+                 .replace("<", "\\u003c")
+                 .replace(" ", "\\u2028")
+                 .replace(" ", "\\u2029"))
     html = _TRANSCRIPT_HTML
-    html = html.replace("__TITLE__", title)
-    html = html.replace("__DATA_JSON__", json.dumps(data, ensure_ascii=False, cls=_SafeEncoder))
-    html = html.replace("__AUDIO_FILE__", audio_file)
+    html = html.replace("__TITLE__", _htmlmod.escape(title))
+    html = html.replace("__DATA_JSON__", safe_json)
+    html = html.replace("__AUDIO_FILE__", _htmlmod.escape(audio_file, quote=True))
     return html
 
 
@@ -1582,6 +1714,23 @@ a{color:var(--accent2)}
   </div>
   <input type="file" id="fileinput" accept="audio/*,video/*" style="display:none" onchange="fileChosen(this)">
 
+  <style>
+    .tier-btn{flex:1;padding:.5rem .6rem;border:1px solid var(--border);border-radius:8px;
+      background:var(--surface2);color:var(--text);font-family:var(--font);font-size:.82rem;
+      cursor:pointer;text-align:center;transition:border-color .15s}
+    .tier-btn:hover{border-color:var(--accent)}
+    .tier-btn.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);font-weight:600}
+  </style>
+  <div style="margin:.9rem 0 .2rem">
+    <label>Quality preset</label>
+    <div style="display:flex;gap:.5rem;margin-top:.35rem">
+      <button type="button" class="tier-btn" data-tier="draft"      onclick="applyTier('draft')">⚡ Quick draft</button>
+      <button type="button" class="tier-btn" data-tier="production" onclick="applyTier('production')">🎙️ Production</button>
+      <button type="button" class="tier-btn" data-tier="high"       onclick="applyTier('high')">🎯 High accuracy</button>
+    </div>
+    <div class="hint" id="tier-desc" style="min-height:1.2em">Pick a preset, or set the options below yourself.</div>
+  </div>
+
   <div class="grid">
     <div>
       <label>Whisper Model</label>
@@ -1592,6 +1741,7 @@ a{color:var(--accent2)}
         <option value="medium">medium</option>
         <option value="large-v2">large-v2</option>
         <option value="large-v3">large-v3 — best accuracy</option>
+        <option value="large-v3-turbo">large-v3-turbo — near-best, much faster</option>
       </select>
       <div class="hint">First run downloads the model weights.</div>
     </div>
@@ -1599,6 +1749,12 @@ a{color:var(--accent2)}
       <label>Language</label>
       <input type="text" id="language" placeholder="auto-detect (leave blank)" maxlength="10">
       <div class="hint">ISO code, e.g. <code>en</code>, <code>de</code>, <code>es</code></div>
+    </div>
+    <div>
+      <label>Vocabulary hints <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+      <input type="text" id="initial_prompt" maxlength="600"
+             placeholder="Names &amp; terms, e.g. Lutheran Church—Missouri Synod">
+      <div class="hint">Comma-separated names and domain terms — strongly improves how they're transcribed.</div>
     </div>
     <div>
       <label>Task</label>
@@ -1727,6 +1883,28 @@ function ev(e,action){
   }
 }
 
+const TIERS={
+  draft:{model:'base',noise:'afftdn',
+    desc:'⚡ Fast general take — good for reviewing content and finding quotes. Not recommended for publication or when exact wording matters.'},
+  production:{model:'medium',noise:'best',
+    desc:'🎙️ Publication quality for podcasts and general content.'},
+  high:{model:'large-v3-turbo',noise:'best',
+    desc:'🎯 For material where wording matters — legal, theological, medical, official statements. Slowest, most accurate. Automated transcription can still make errors: review the transcript before relying on it.'}
+};
+function applyTier(t){
+  const cfg=TIERS[t];if(!cfg)return;
+  document.getElementById('model').value=cfg.model;
+  const ns=document.getElementById('noise_mode');
+  if(cfg.noise==='best'){
+    // best installed mode wins: deepfilternet > noisereduce > afftdn
+    for(const v of ['deepfilternet','noisereduce','afftdn']){
+      if([...ns.options].some(o=>o.value===v)){ns.value=v;break;}
+    }
+  }else{ns.value=cfg.noise;}
+  document.getElementById('tier-desc').textContent=cfg.desc;
+  document.querySelectorAll('.tier-btn').forEach(b=>b.classList.toggle('sel',b.dataset.tier===t));
+  if(t==='high')document.getElementById('initial_prompt').focus();
+}
 function fileChosen(input){if(input.files[0])setFile(input.files[0]);}
 function setFile(f){
   selectedFile=f;
@@ -1754,6 +1932,7 @@ async function submitJob(){
   fd.append('normalize',document.getElementById('normalize').checked?'1':'0');
   fd.append('noise_mode',document.getElementById('noise_mode').value);
   fd.append('diarize',document.getElementById('diarize').checked?'1':'0');
+  fd.append('initial_prompt',document.getElementById('initial_prompt').value);
   try{
     const r=await fetch('/api/process',{method:'POST',body:fd});
     const d=await r.json();
@@ -2010,6 +2189,35 @@ _jobs_lock = threading.Lock()
 _install_jobs: dict[str, dict] = {}
 _install_jobs_lock = threading.Lock()
 
+# Processing jobs run one at a time through this queue. Spawning a thread per
+# upload meant N simultaneous jobs = N Whisper models in RAM plus N all-core
+# noise-reduction runs — enough to OOM the machine. Jobs wait as "queued".
+_job_queue: queue.Queue = queue.Queue()
+_job_worker_started = False
+_job_worker_lock = threading.Lock()
+
+
+def _ensure_job_worker() -> None:
+    """Start the single pipeline-consumer thread on first use."""
+    global _job_worker_started
+    with _job_worker_lock:
+        if _job_worker_started:
+            return
+
+        def _consume():
+            while True:
+                fn = _job_queue.get()
+                try:
+                    fn()
+                except Exception:
+                    traceback.print_exc()
+                finally:
+                    _job_queue.task_done()
+
+        threading.Thread(target=_consume, daemon=True,
+                         name="castpolish-job-worker").start()
+        _job_worker_started = True
+
 
 def create_job(title: str, settings: dict) -> str:
     jid = str(uuid.uuid4())
@@ -2029,7 +2237,12 @@ def create_job(title: str, settings: dict) -> str:
 def job_log(jid: str, msg: str):
     with _jobs_lock:
         if jid in _jobs:
-            _jobs[jid]["log"].append(msg)
+            log = _jobs[jid]["log"]
+            log.append(msg)
+            # /api/jobs ships every job's log to the browser on a 2 s poll,
+            # so an unbounded list grows the payload for the session's life
+            if len(log) > 1000:
+                del log[:-1000]
             print(f"[{jid[:8]}] {msg}")
 
 
@@ -2043,6 +2256,16 @@ def job_status(jid: str, status: str):
 
 def run_pipeline(input_path: str, output_dir: str, settings: dict,
                  job_id: str | None = None) -> dict:
+    """Run the full pipeline with a managed temp dir (cleaned up on all paths)."""
+    tmp_dir = tempfile.mkdtemp(prefix="cp_")
+    try:
+        return _run_pipeline_inner(input_path, output_dir, settings, job_id, tmp_dir)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def _run_pipeline_inner(input_path: str, output_dir: str, settings: dict,
+                        job_id: str | None, tmp_dir: str) -> dict:
     """
     Runs the full processing pipeline. Returns dict of output file paths.
     Produces exactly 4 outputs (matching Auphonic):
@@ -2081,9 +2304,13 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
     if settings.get("transcribe_only"):
         log("Audio processing skipped — transcribe-only mode.")
         import shutil as _shutil
+        # Keep the source's real extension — these are the untouched input
+        # bytes, so naming them .mp3 would lie to players and downloaders.
+        src_ext = Path(input_path).suffix.lower()
+        if src_ext and src_ext != f".{fmt}":
+            out_audio = os.path.join(output_dir, safe_stem + src_ext)
         _shutil.copy2(input_path, out_audio)
-        tmp_wav_dir = tempfile.mkdtemp(prefix="cp_wav_")
-        whisper_wav = os.path.join(tmp_wav_dir, "whisper.wav")
+        whisper_wav = os.path.join(tmp_dir, "whisper.wav")
         _ffmpeg("-i", input_path, "-ac", "1", "-ar", "16000", "-f", "wav", whisper_wav)
         wav_for_whisper = whisper_wav
     else:
@@ -2094,6 +2321,7 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
             noise_mode=settings.get("noise_mode", "none"),
             target_lufs=float(settings.get("lufs", -16.0)),
             log=log,
+            tmp_dir=tmp_dir,
         )
 
     duration = get_duration(out_audio) or get_duration(input_path)
@@ -2104,10 +2332,13 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
         model_size=settings.get("model", "small"),
         language=settings.get("language") or None,
         task=settings.get("task", "transcribe"),
+        initial_prompt=(settings.get("initial_prompt") or "").strip() or None,
         log=log,
     )
 
     # ── 3. Speaker diarization (optional) ────────────────────────────────────
+    if settings.get("diarize"):
+        _refresh_optional_deps()
     if settings.get("diarize") and HAS_PYANNOTE:
         hf_token = (settings.get("hf_token")
                     or os.environ.get("HF_TOKEN")
@@ -2157,9 +2388,9 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
     # Use a server URL when running under Flask so the player can fetch the audio;
     # fall back to a relative path for CLI-generated HTML opened directly.
     if job_id:
-        audio_ref = f"/audio/{job_id}/{safe_stem}.{fmt}"
+        audio_ref = f"/audio/{job_id}/{Path(out_audio).name}"
     else:
-        audio_ref = f"{safe_stem}.{fmt}"
+        audio_ref = Path(out_audio).name
     html = build_output_html(
         title=stem,
         audio_file=audio_ref,
@@ -2177,13 +2408,17 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
 
     # ── 7. Write processing log file ─────────────────────────────────────────
     total_secs = time.time() - _start_time
-    tm, ts = divmod(int(total_secs), 60)
 
     try:
         input_size_mb = os.path.getsize(input_path) / (1024 * 1024)
     except OSError:
         input_size_mb = 0.0
-    dur_m, dur_s = divmod(int(duration or 0), 60)
+    def _fmt_dur(seconds: float) -> str:
+        # H:MM:SS for hour-plus files — a 90-min episode is "1:30:00", not "90:00"
+        s = int(seconds or 0)
+        h, rem = divmod(s, 3600)
+        m, sec = divmod(rem, 60)
+        return f"{h}:{m:02d}:{sec:02d}" if h else f"{m}:{sec:02d}"
 
     _noise_labels = {
         "none":         "None",
@@ -2212,7 +2447,7 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
         "",
         "  INPUT",
         f"    File        :  {_display_filename}",
-        f"    Duration    :  {dur_m}:{dur_s:02d}",
+        f"    Duration    :  {_fmt_dur(duration)}",
         f"    Size        :  {input_size_mb:.1f} MB",
         "",
         "  SETTINGS",
@@ -2238,7 +2473,7 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
             log_lines.append(f"    {Path(fpath).name}")
     log_lines += [
         "",
-        f"  Total processing time :  {tm}:{ts:02d}",
+        f"  Total processing time :  {_fmt_dur(total_secs)}",
         sep,
         "",
     ]
@@ -2261,11 +2496,26 @@ except ImportError:
     HAS_FLASK = False
 
 
+def _parse_lufs(raw) -> float:
+    """Parse the loudness target, guarding against malformed form input."""
+    try:
+        val = float(raw)
+    except (TypeError, ValueError):
+        return -16.0
+    return max(-30.0, min(-5.0, val))
+
+
 def make_app(output_dir: str) -> "Flask":
     from flask import Flask, request, jsonify, send_file, redirect, Response
 
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024 * 1024  # 4 GB
+
+    @app.errorhandler(413)
+    def too_large(_e):
+        # Werkzeug's default 413 is HTML; the upload JS does r.json() and
+        # would surface a SyntaxError instead of this message
+        return jsonify({"error": "File exceeds the 4 GB upload limit."}), 413
 
     @app.route("/")
     def index():
@@ -2287,26 +2537,31 @@ def make_app(output_dir: str) -> "Flask":
             "normalize":  request.form.get("normalize", "1") == "1",
             "noise_mode": request.form.get("noise_mode", "none"),
             "diarize":    request.form.get("diarize", "0") == "1",
-            "lufs":      float(request.form.get("lufs", -16)),
+            "lufs":      _parse_lufs(request.form.get("lufs")),
+            "initial_prompt": (request.form.get("initial_prompt") or "")[:600],
             "title":     title,
+            # Without this, web jobs always hit localhost:11434 no matter
+            # what Ollama host is saved in Settings (the CLI path passes it).
+            "ollama_host": load_config().get("ollama_host", "http://localhost:11434"),
         }
 
         jid = create_job(title, settings)
 
-        # Name the folder after the audio file; add -01, -02 … if it already exists
+        # Name the folder after the audio file; add -01, -02 … if it already
+        # exists. makedirs without exist_ok claims the directory atomically —
+        # a check-then-create here would let two concurrent uploads of the
+        # same filename land in one folder and clobber each other's files.
         safe_stem = re.sub(r'[<>:"/\\|?*\s]+', "-", Path(f.filename or "audio").stem).strip("-") or "audio"
         base_dir = os.path.join(output_dir, safe_stem)
-        if not os.path.exists(base_dir):
-            job_dir = base_dir
-        else:
-            n = 1
-            while True:
-                candidate = f"{base_dir}-{n:02d}"
-                if not os.path.exists(candidate):
-                    job_dir = candidate
-                    break
+        n = 0
+        while True:
+            candidate = base_dir if n == 0 else f"{base_dir}-{n:02d}"
+            try:
+                os.makedirs(candidate)
+                job_dir = candidate
+                break
+            except FileExistsError:
                 n += 1
-        Path(job_dir).mkdir(parents=True, exist_ok=True)
 
         # Save uploaded file
         safe_name = re.sub(r'[<>:"/\\|?*]', "_", f.filename or "audio")
@@ -2331,15 +2586,29 @@ def make_app(output_dir: str) -> "Flask":
                     _jobs[jid]["finished"] = time.time()
                 job_status(jid, "error")
                 traceback.print_exc()
+            finally:
+                # The upload served its purpose; without cleanup every job
+                # permanently doubles its disk footprint by the input size.
+                try:
+                    os.remove(upload_path)
+                except OSError:
+                    pass
 
-        threading.Thread(target=worker, daemon=True).start()
+        _ensure_job_worker()
+        _job_queue.put(worker)
         return jsonify({"id": jid})
+
+    def _job_view(j: dict) -> dict:
+        # Copy the mutable members while holding the lock — the worker thread
+        # appends to "log" while jsonify would otherwise iterate the live list
+        return {k: (list(v) if k == "log" else dict(v) if k == "settings" else v)
+                for k, v in j.items() if k != "outputs"}
 
     @app.route("/api/jobs")
     def api_jobs():
         with _jobs_lock:
             jobs = [
-                {k: v for k, v in j.items() if k != "outputs"}
+                _job_view(j)
                 for j in sorted(_jobs.values(), key=lambda x: -x["created"])
             ]
         return jsonify(jobs)
@@ -2348,9 +2617,10 @@ def make_app(output_dir: str) -> "Flask":
     def api_job(jid):
         with _jobs_lock:
             j = _jobs.get(jid)
-        if not j:
+            view = _job_view(j) if j else None
+        if not view:
             return jsonify({"error": "not found"}), 404
-        return jsonify({k: v for k, v in j.items() if k != "outputs"})
+        return jsonify(view)
 
     @app.route("/results/<jid>")
     def results(jid):
@@ -2387,7 +2657,11 @@ def make_app(output_dir: str) -> "Flask":
         audio_path = j.get("outputs", {}).get("audio")
         if audio_path and os.path.exists(audio_path):
             ext = os.path.splitext(audio_path)[1].lower()
-            mime = "audio/mp4" if ext == ".m4a" or ext == ".mp4" else "audio/mpeg"
+            mime = {
+                ".m4a": "audio/mp4", ".mp4": "audio/mp4",
+                ".wav": "audio/wav", ".flac": "audio/flac",
+                ".ogg": "audio/ogg", ".opus": "audio/ogg",
+            }.get(ext, "audio/mpeg")
             return send_file(audio_path, mimetype=mime)
         return "Not found", 404
 
@@ -2405,7 +2679,11 @@ def make_app(output_dir: str) -> "Flask":
 
     @app.route("/api/config", methods=["POST"])
     def api_config_post():
-        data = request.get_json(force=True) or {}
+        # No force=True: requiring the JSON content-type means cross-origin
+        # pages can't reach this via a no-preflight "simple request" (CSRF) —
+        # this endpoint can repoint ollama_host, which would exfiltrate
+        # transcripts to an attacker's server.
+        data = request.get_json(silent=True) or {}
         updates = {}
         if "hf_token" in data and data["hf_token"].strip():
             updates["hf_token"] = data["hf_token"].strip()
@@ -2470,9 +2748,10 @@ def make_app(output_dir: str) -> "Flask":
                     with _install_jobs_lock:
                         _install_jobs[iid]["status"] = "error"
                     return
+                _refresh_optional_deps()
                 with _install_jobs_lock:
                     _install_jobs[iid]["status"] = "done"
-                _log("✓ Complete — reload the page to see updated status.")
+                _log("✓ Complete — the new package is available immediately.")
             except Exception as exc:
                 _log(f"✗ Error: {exc}")
                 with _install_jobs_lock:
@@ -2516,9 +2795,20 @@ def make_app(output_dir: str) -> "Flask":
                 with lock:
                     results[display_key] = {"update_available": False}
                 return
-            latest = _pypi_latest(pypi_name)
+            latest = _pypi_latest(pypi_name, wait=True)
+
+            def _newer(a: str, b: str) -> bool:
+                # "latest != installed" flagged dev installs NEWER than PyPI
+                # as updates; compare numerically instead
+                def parse(v):
+                    return tuple(int(p) for p in re.findall(r"\d+", v)[:4])
+                try:
+                    return parse(a) > parse(b)
+                except Exception:
+                    return a != b
+
             with lock:
-                if latest and latest != installed:
+                if latest and _newer(latest, installed):
                     results[display_key] = {"update_available": True,
                                             "installed": installed, "latest": latest}
                 else:
@@ -2537,6 +2827,9 @@ def make_app(output_dir: str) -> "Flask":
 
     @app.route("/api/deps")
     def api_deps():
+        # Pick up anything installed from the Dependencies panel this session
+        _refresh_optional_deps()
+
         def ver(pkg):
             try:
                 import importlib.metadata
