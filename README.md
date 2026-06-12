@@ -45,6 +45,8 @@ Linux and Windows users run `python3 castpolish.py serve` directly and open `htt
   - *Dynamic* — [noisereduce](https://github.com/timsainburg/noisereduce) spectral subtraction (adapts over time)
   - *AI Enhanced* — [DeepFilterNet3](https://github.com/Rikorose/DeepFilterNet) neural speech enhancement (highest quality, runs in an isolated venv)
 - **Whisper transcription** — word-level timestamps via [faster-whisper](https://github.com/guillaumekientz/faster-whisper), exported as HTML, WebVTT, and Auphonic-compatible JSON
+- **Confidence review** — the HTML transcript editor flags words Whisper was unsure about; pick a threshold (50–90 %) and step through flagged words with ‹ › to verify them against the audio. Pairs with the 🎯 High accuracy preset
+- **Cancellable jobs** — a ✕ Cancel button on queued and running jobs stops the pipeline (kills a running ffmpeg/DeepFilterNet immediately) and cleans up partial outputs
 - **AI shownotes** — chapter titles, long summary, brief summary, and tags via [Ollama](https://ollama.com) (local LLM, no API key)
 - **Speaker diarization** — who said what, via pyannote.audio (requires free HuggingFace token)
 - **Processing log** — a `.log` file saved alongside every output detailing all settings, processing steps with timestamps, loudness measurements, and output file sizes

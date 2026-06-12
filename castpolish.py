@@ -50,7 +50,7 @@ CONFIG_FILE     = CONFIG_DIR / "config.json"
 _DF_VENV_DIR    = CONFIG_DIR / "df_venv"
 _DF_VENV_PYTHON = _DF_VENV_DIR / "bin" / "python"
 
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 
 # Patched df/io.py — replaces torchaudio I/O (removed in torchaudio 2.2+) with soundfile.
 # Applied automatically after every deepfilternet venv install/upgrade.
@@ -508,6 +508,74 @@ def _upgrade_deepfilternet_venv(log=None) -> None:
         log("✓ DeepFilterNet upgraded.")
 
 
+# ─── Job cancellation ─────────────────────────────────────────────────────────
+
+class JobCancelled(Exception):
+    """Raised inside a pipeline thread when the user cancels the job."""
+
+
+# Job id of the pipeline currently running in this thread (web jobs only —
+# CLI runs leave it unset, making every cancel check a no-op).
+_job_ctx = threading.local()
+
+# Cancel flags live outside _jobs so the job dict stays JSON-serializable
+# for /api/jobs. Same lifecycle as _jobs (kept for the session).
+_cancel_events: dict[str, threading.Event] = {}
+_cancel_lock = threading.Lock()
+
+# External processes (ffmpeg, DeepFilterNet) a running job is blocked on,
+# so the cancel endpoint can kill them instead of waiting them out.
+_active_procs: dict[str, "subprocess.Popen"] = {}
+_active_procs_lock = threading.Lock()
+
+
+def _current_jid() -> str | None:
+    return getattr(_job_ctx, "jid", None)
+
+
+def _check_cancel() -> None:
+    """Raise JobCancelled if the job running in this thread was cancelled."""
+    jid = _current_jid()
+    if jid is None:
+        return
+    with _cancel_lock:
+        ev = _cancel_events.get(jid)
+    if ev is not None and ev.is_set():
+        raise JobCancelled()
+
+
+def _run_cancellable(cmd: list, timeout=None, text: bool = False):
+    """subprocess.run equivalent whose process a job cancel can kill.
+    The Popen is registered under the current job id while it runs, so
+    /api/jobs/<id>/cancel can terminate a long ffmpeg or DeepFilterNet run
+    instead of waiting hours for it to finish."""
+    _check_cancel()
+    jid = _current_jid()
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=text)
+    if jid:
+        with _active_procs_lock:
+            _active_procs[jid] = proc
+        # A cancel landing between the check above and registration would
+        # have found nothing to kill — close that window ourselves.
+        with _cancel_lock:
+            ev = _cancel_events.get(jid)
+        if ev is not None and ev.is_set():
+            proc.kill()
+    try:
+        out, err = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.communicate()
+        raise
+    finally:
+        if jid:
+            with _active_procs_lock:
+                _active_procs.pop(jid, None)
+    _check_cancel()
+    return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
+
+
 # Generous ceiling: ffmpeg can stall forever on a truncated container, which
 # would leave the job "processing" with no way to cancel. Even re-encoding a
 # multi-hour file finishes well inside this.
@@ -517,7 +585,7 @@ _FFMPEG_TIMEOUT = 4 * 3600
 def _ffmpeg(*args, check=True):
     cmd = [_FFMPEG_BIN, "-y", "-hide_banner", "-loglevel", "error"] + list(args)
     try:
-        result = subprocess.run(cmd, capture_output=True, timeout=_FFMPEG_TIMEOUT)
+        result = _run_cancellable(cmd, timeout=_FFMPEG_TIMEOUT)
     except subprocess.TimeoutExpired:
         raise RuntimeError(
             f"ffmpeg timed out after {_FFMPEG_TIMEOUT // 3600} hours — "
@@ -620,9 +688,9 @@ def _denoise_deepfilternet(in_wav: str, out_wav: str, log=None):
         # Scale the ceiling with file length: a flat 600 s silently degraded
         # long episodes to "no noise reduction" via the fallback copy below.
         df_timeout = max(600, int(get_duration(in_wav) * 3) + 120)
-        proc = subprocess.run(
+        proc = _run_cancellable(
             [str(_DF_VENV_PYTHON), "-c", _script, in_wav, out_wav],
-            capture_output=True, text=True, timeout=df_timeout,
+            timeout=df_timeout, text=True,
         )
         # Forward subprocess stdout lines to the job log,
         # stripping loguru's "YYYY-MM-DD HH:MM:SS | LEVEL | DF | " prefix
@@ -638,6 +706,8 @@ def _denoise_deepfilternet(in_wav: str, out_wav: str, log=None):
             err = (proc.stderr.strip() or proc.stdout.strip() or
                    f"exit {proc.returncode}")
             raise RuntimeError(err)
+    except JobCancelled:
+        raise
     except Exception as exc:
         if log:
             log(f"DeepFilterNet error: {exc} — falling back to copy")
@@ -722,11 +792,11 @@ def process_audio(input_path: str, output_audio: str,
     if normalize:
         import re as _re
         info("Measuring loudness (pass 1/2)…")
-        meas = subprocess.run(
+        meas = _run_cancellable(
             [_FFMPEG_BIN, "-y", "-i", src,
              "-af", f"{pre_filters},loudnorm=I={target_lufs}:TP=-1.5:LRA=11:print_format=json",
              "-f", "null", "-"],
-            capture_output=True, timeout=_FFMPEG_TIMEOUT,
+            timeout=_FFMPEG_TIMEOUT,
         )
         stderr = meas.stderr.decode("utf-8", errors="replace")
         m = _re.search(r'\{\s*"input_i".*?\}', stderr, _re.DOTALL)
@@ -825,6 +895,9 @@ def transcribe(wav_path: str, model_size: str = "small",
         detected = info_obj.language
         segs = []
         for seg in gen:
+            # faster-whisper's generator is lazy — checking per segment lets a
+            # cancel land mid-transcription instead of after the whole file
+            _check_cancel()
             words = []
             for w in (seg.words or []):
                 words.append({
@@ -1016,6 +1089,7 @@ def generate_shownotes(segments: list, title: str,
         transcript = transcript[:12000] + "…"
 
     try:
+        _check_cancel()
         info("Generating long summary…")
         long_prompt = (
             f"You are summarizing an audio transcript titled \"{title}\".\n\n"
@@ -1025,6 +1099,7 @@ def generate_shownotes(segments: list, title: str,
         )
         long = ollama_generate(long_prompt, model, host, num_predict=700, timeout=180)
 
+        _check_cancel()
         info("Generating brief summary…")
         brief_prompt = (
             f"You are summarizing an audio transcript titled \"{title}\".\n\n"
@@ -1034,6 +1109,7 @@ def generate_shownotes(segments: list, title: str,
         )
         brief = ollama_generate(brief_prompt, model, host, num_predict=300, timeout=120)
 
+        _check_cancel()
         info("Generating tags…")
         tags_prompt = (
             f"List exactly 10 short keyword tags for this audio titled \"{title}\".\n\n"
@@ -1044,6 +1120,8 @@ def generate_shownotes(segments: list, title: str,
         tags = [t.strip().strip('"').strip("'") for t in tags_raw.split(",") if t.strip()][:10]
 
         return {"long": long, "brief": brief, "tags": tags}
+    except JobCancelled:
+        raise
     except Exception as e:
         info(f"Shownotes generation failed: {e}")
         return {}
@@ -1061,6 +1139,7 @@ def generate_chapter_titles_ollama(chapters_segs: list[tuple],
     titles = []
     consecutive_failures = 0
     for idx, (start, segs) in enumerate(chapters_segs):
+        _check_cancel()
         # Circuit breaker: each failed Ollama call costs up to its full
         # timeout, serially. A long episode can have 100+ chapters — without
         # this, a hung Ollama adds hours before the job proceeds.
@@ -1316,6 +1395,11 @@ p.para{margin-bottom:.5rem;line-height:1.85}
 .w:hover{background:var(--word-hover)}
 .w.now{background:var(--playing);color:#111;border-radius:3px}
 .w.lc{color:var(--low-conf)}
+body.conf-mode .w.lc{background:rgba(224,92,92,.16);border-bottom:2px dotted var(--low-conf);border-radius:3px}
+.w.conf-cur{outline:2px solid var(--low-conf);outline-offset:1px;border-radius:3px}
+#conf-btn.on{border-color:var(--low-conf);color:var(--low-conf)}
+#conf-nav{display:none;gap:.35rem;align-items:center}
+.conf-pos{font-size:.72rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
 .spk{display:inline-block;font-size:.65rem;font-weight:700;color:var(--accent2);
   background:rgba(124,106,247,.18);border-radius:3px;padding:0 .35rem;
   margin-right:.3rem;text-transform:uppercase;letter-spacing:.04em}
@@ -1364,6 +1448,19 @@ p.para{margin-bottom:.5rem;line-height:1.85}
     <button class="xbtn" onclick="dl('vtt')">VTT</button>
     <button class="xbtn" onclick="dl('srt')">SRT</button>
     <button class="xbtn" onclick="dl('txt')">TXT</button>
+    <span id="conf-nav">
+      <select class="xbtn" id="conf-th" onchange="confThChanged(this.value)" title="Flag words below this confidence">
+        <option value="0.5">&lt; 50%</option>
+        <option value="0.6">&lt; 60%</option>
+        <option value="0.7">&lt; 70%</option>
+        <option value="0.8">&lt; 80%</option>
+        <option value="0.9">&lt; 90%</option>
+      </select>
+      <button class="xbtn" onclick="confStep(-1)" title="Previous flagged word">‹</button>
+      <span class="conf-pos" id="conf-pos">–</span>
+      <button class="xbtn" onclick="confStep(1)" title="Next flagged word">›</button>
+    </span>
+    <button class="xbtn" id="conf-btn" onclick="toggleConfMode()" title="Review low-confidence words">⚠ <span id="conf-count">0</span></button>
     <button class="xbtn" id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark">🌙</button>
   </div>
 </header>
@@ -1479,13 +1576,48 @@ function renderSegs(ss,container){
 
 function mkWord(txt,ws,we,conf){
   const sp=document.createElement('span');
-  sp.className='w'+(conf<0.6?' lc':'');
-  sp.dataset.s=ws;sp.dataset.e=we;
+  sp.className='w';
+  sp.dataset.s=ws;sp.dataset.e=we;sp.dataset.c=conf;
   sp.textContent=txt;
   sp.title=`${fmt(ws)}  conf:${(conf*100).toFixed(0)}%`;
   sp.onclick=()=>{aud.currentTime=ws;if(aud.paused)aud.play()};
   return sp;
 }
+
+/* ── Confidence review ── */
+let confTh=parseFloat(localStorage.getItem('cp-conf-th'));
+if(!(confTh>0&&confTh<1))confTh=0.6;
+let confIdx=-1;
+document.getElementById('conf-th').value=String(confTh);
+function flaggedWords(){return[...document.querySelectorAll('.w.lc')];}
+function applyConfTh(){
+  document.querySelectorAll('.w[data-c]').forEach(w=>w.classList.toggle('lc',+w.dataset.c<confTh));
+  document.querySelectorAll('.conf-cur').forEach(w=>w.classList.remove('conf-cur'));
+  confIdx=-1;
+  const n=flaggedWords().length;
+  document.getElementById('conf-count').textContent=n;
+  updConfPos(n);
+}
+function updConfPos(n){
+  document.getElementById('conf-pos').textContent=(confIdx>=0?confIdx+1:'–')+'/'+n;
+}
+function confThChanged(v){confTh=parseFloat(v);localStorage.setItem('cp-conf-th',v);applyConfTh();}
+function toggleConfMode(){
+  const on=document.body.classList.toggle('conf-mode');
+  document.getElementById('conf-btn').classList.toggle('on',on);
+  document.getElementById('conf-nav').style.display=on?'inline-flex':'none';
+  if(!on){document.querySelectorAll('.conf-cur').forEach(w=>w.classList.remove('conf-cur'));confIdx=-1;}
+}
+function confStep(d){
+  const f=flaggedWords();if(!f.length)return;
+  document.querySelectorAll('.conf-cur').forEach(w=>w.classList.remove('conf-cur'));
+  confIdx=confIdx<0?(d>0?0:f.length-1):(confIdx+d+f.length)%f.length;
+  const w=f[confIdx];
+  w.classList.add('conf-cur');
+  w.scrollIntoView({block:'center',behavior:'smooth'});
+  updConfPos(f.length);
+}
+applyConfTh();
 
 /* ── Playback sync ── */
 const allW=()=>document.querySelectorAll('.w[data-s]');
@@ -1673,6 +1805,9 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:po
 .s-processing{background:rgba(124,106,247,.2);color:var(--accent2);animation:pulse 1.5s infinite}
 .s-done{background:rgba(76,175,125,.2);color:var(--success)}
 .s-error{background:rgba(224,92,92,.2);color:var(--error)}
+.s-cancelled{background:rgba(120,120,160,.2);color:var(--muted)}
+.cancel-btn{color:var(--error);border-color:var(--error)}
+.cancel-btn:hover{background:var(--error);color:#fff;border-color:var(--error)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
 .job-link{color:var(--accent2);text-decoration:none;font-weight:500}
 .job-link:hover{text-decoration:underline}
@@ -1969,7 +2104,7 @@ function renderJobs(jobs){
   if(!jobs.length){el.innerHTML='<div class="empty-jobs">No jobs yet.</div>';return;}
   let html='<table class="jobs-table"><thead><tr><th>Title</th><th>Status</th><th>Model</th><th>Started</th><th>Duration</th><th>Results</th></tr></thead><tbody>';
   jobs.forEach(j=>{
-    const sc={'queued':'s-queued','processing':'s-processing','done':'s-done','error':'s-error'}[j.status]||'s-queued';
+    const sc={'queued':'s-queued','processing':'s-processing','done':'s-done','error':'s-error','cancelled':'s-cancelled'}[j.status]||'s-queued';
     const ts=j.started?new Date(j.started*1000).toLocaleTimeString():(j.created?new Date(j.created*1000).toLocaleTimeString():'—');
     const dur=j.finished&&j.started?fmtDuration(j.finished-j.started):(j.status==='processing'?'running…':'—');
     const links=j.status==='done'
@@ -1979,7 +2114,9 @@ function renderJobs(jobs){
       +` <a class="job-link" href="/download/${j.id}/json">JSON</a>`
       +` <a class="job-link" href="/download/${j.id}/vtt">VTT</a>`
       +` <a class="job-link" href="/download/${j.id}/log">Log</a>`
-      :'—';
+      :(j.status==='processing'||j.status==='queued')
+        ?`<button class="mini-btn cancel-btn" onclick="cancelJob('${j.id}')">✕ Cancel</button>`
+        :'—';
     html+=`<tr>
       <td>${esc(j.title||j.id.slice(0,8))}</td>
       <td><span class="status-badge ${sc}">${j.status}</span>
@@ -1990,6 +2127,15 @@ function renderJobs(jobs){
   });
   html+='</tbody></table>';
   el.innerHTML=html;
+}
+
+async function cancelJob(id){
+  if(!confirm('Cancel this job?'))return;
+  try{
+    await fetch('/api/jobs/'+id+'/cancel',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:'{}'});
+  }catch(e){}
+  pollJobs();
 }
 
 let _depsCache={};
@@ -2226,6 +2372,8 @@ def _ensure_job_worker() -> None:
 
 def create_job(title: str, settings: dict) -> str:
     jid = str(uuid.uuid4())
+    with _cancel_lock:
+        _cancel_events[jid] = threading.Event()
     with _jobs_lock:
         _jobs[jid] = {
             "id": jid,
@@ -2342,6 +2490,7 @@ def _run_pipeline_inner(input_path: str, output_dir: str, settings: dict,
     )
 
     # ── 3. Speaker diarization (optional) ────────────────────────────────────
+    _check_cancel()
     if settings.get("diarize"):
         _refresh_optional_deps()
     if settings.get("diarize") and HAS_PYANNOTE:
@@ -2575,6 +2724,14 @@ def make_app(output_dir: str) -> "Flask":
         settings["original_filename"] = f.filename or safe_name   # for the log file
 
         def worker():
+            with _cancel_lock:
+                cancel_ev = _cancel_events.get(jid)
+            if cancel_ev is not None and cancel_ev.is_set():
+                # Cancelled while still queued — the endpoint already set the
+                # status; just remove the per-job folder with the upload.
+                shutil.rmtree(job_dir, ignore_errors=True)
+                return
+            _job_ctx.jid = jid
             with _jobs_lock:
                 _jobs[jid]["started"] = time.time()
             job_status(jid, "processing")
@@ -2585,6 +2742,13 @@ def make_app(output_dir: str) -> "Flask":
                     _jobs[jid]["status"] = "done"
                     _jobs[jid]["finished"] = time.time()
                 job_log(jid, "Processing complete.")
+            except JobCancelled:
+                job_log(jid, "Cancelled by user.")
+                with _jobs_lock:
+                    _jobs[jid]["finished"] = time.time()
+                job_status(jid, "cancelled")
+                # Partial outputs of a cancelled job are junk — drop the folder
+                shutil.rmtree(job_dir, ignore_errors=True)
             except Exception as exc:
                 job_log(jid, f"ERROR: {exc}")
                 with _jobs_lock:
@@ -2592,6 +2756,7 @@ def make_app(output_dir: str) -> "Flask":
                 job_status(jid, "error")
                 traceback.print_exc()
             finally:
+                _job_ctx.jid = None
                 # The upload served its purpose; without cleanup every job
                 # permanently doubles its disk footprint by the input size.
                 try:
@@ -2626,6 +2791,41 @@ def make_app(output_dir: str) -> "Flask":
         if not view:
             return jsonify({"error": "not found"}), 404
         return jsonify(view)
+
+    @app.route("/api/jobs/<jid>/cancel", methods=["POST"])
+    def api_cancel(jid):
+        # Same CSRF guard as /api/config: requiring the JSON content-type
+        # keeps cross-origin "simple requests" from killing jobs.
+        if not request.is_json:
+            return jsonify({"error": "expected application/json"}), 415
+        with _cancel_lock:
+            ev = _cancel_events.get(jid)
+        with _jobs_lock:
+            j = _jobs.get(jid)
+            if not j:
+                return jsonify({"error": "not found"}), 404
+            status = j["status"]
+            if status not in ("queued", "processing") or ev is None:
+                return jsonify({"ok": False, "error": f"job is {status}"}), 409
+            ev.set()
+            if status == "queued":
+                # Never entered the worker — finalize here so it doesn't sit
+                # as "queued" behind a long-running job; the worker drops the
+                # job folder when it eventually dequeues the entry.
+                j["status"] = "cancelled"
+                j["finished"] = time.time()
+        if status == "queued":
+            job_log(jid, "Cancelled while queued.")
+            return jsonify({"ok": True})
+        job_log(jid, "⏹ Cancelling…")
+        # Kill whatever external process the job is blocked on right now
+        # (ffmpeg, DeepFilterNet); pure-Python stages exit at their next
+        # cooperative checkpoint.
+        with _active_procs_lock:
+            proc = _active_procs.get(jid)
+            if proc is not None and proc.poll() is None:
+                proc.kill()
+        return jsonify({"ok": True})
 
     @app.route("/results/<jid>")
     def results(jid):
