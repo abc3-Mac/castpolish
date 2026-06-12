@@ -49,7 +49,7 @@ CONFIG_FILE     = CONFIG_DIR / "config.json"
 _DF_VENV_DIR    = CONFIG_DIR / "df_venv"
 _DF_VENV_PYTHON = _DF_VENV_DIR / "bin" / "python"
 
-__version__ = "1.3.0"
+__version__ = "1.3.1"
 
 # Patched df/io.py — replaces torchaudio I/O (removed in torchaudio 2.2+) with soundfile.
 # Applied automatically after every deepfilternet venv install/upgrade.
@@ -287,15 +287,47 @@ def _pip_install(packages: list, log=None, upgrade: bool = False) -> None:
         raise RuntimeError(f"pip install failed (exit {proc.returncode})")
 
 
+def _df_venv_python() -> tuple:
+    """Pick the interpreter and torch packages for the DeepFilterNet venv.
+
+    PyTorch dropped Intel-Mac wheels after torch 2.2.2, and DeepFilterLib ships
+    Intel wheels only up to Python 3.11 — so on Intel Macs the venv must be
+    built with Python 3.11 and torch pinned to 2.2.2. Apple Silicon (and
+    Linux/Windows) use the current interpreter with latest torch.
+    """
+    import platform as _platform
+    import shutil as _shutil
+
+    if _platform.system() != "Darwin" or _platform.machine() == "arm64":
+        return sys.executable, ["torch", "torchaudio"]
+
+    candidates = [
+        _shutil.which("python3.11"),
+        "/usr/local/bin/python3.11",
+        "/usr/local/opt/python@3.11/bin/python3.11",
+    ]
+    for cand in candidates:
+        if cand and os.path.exists(cand):
+            return cand, ["torch==2.2.2", "torchaudio==2.2.2"]
+
+    raise RuntimeError(
+        "DeepFilterNet on Intel Macs requires Python 3.11 "
+        "(PyTorch dropped Intel-Mac support after torch 2.2.2). "
+        "Install it with:  brew install python@3.11  — then retry. "
+        "The Standard and Dynamic noise reduction modes work without it."
+    )
+
+
 def _install_deepfilternet_venv(log=None) -> None:
     """Create an isolated venv at ~/.castpolish/df_venv/ and install deepfilternet.
     Uses Rust/cargo if available (required for first-time install)."""
-    import venv as _venv
+    venv_python, torch_pkgs = _df_venv_python()
 
     venv_dir = _DF_VENV_DIR
     if log:
         log(f"Creating virtual environment at {venv_dir} …")
-    _venv.create(str(venv_dir), with_pip=True, clear=True)
+    subprocess.run([venv_python, "-m", "venv", "--clear", str(venv_dir)],
+                   capture_output=True, check=True)
 
     pip_bin = str(venv_dir / "bin" / "pip")
 
@@ -303,6 +335,19 @@ def _install_deepfilternet_venv(log=None) -> None:
         log("Upgrading pip in venv…")
     subprocess.run([pip_bin, "install", "--upgrade", "pip"],
                    capture_output=True, check=False)
+
+    if log:
+        log(f"Installing {', '.join(torch_pkgs)} (~200 MB download)…")
+    proc = subprocess.Popen([pip_bin, "install", *torch_pkgs],
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            text=True)
+    for line in proc.stdout:
+        line = line.rstrip()
+        if line and log:
+            log(line)
+    proc.wait()
+    if proc.returncode != 0:
+        raise RuntimeError(f"torch install failed (exit {proc.returncode})")
 
     if log:
         log("Installing deepfilternet (requires Rust — may take 5–15 min on first run)…")
@@ -337,9 +382,14 @@ def _apply_df_io_patch(log=None) -> None:
     """Write the soundfile-based df/io.py patch into the venv.
     Called after every install/upgrade to handle torchaudio 2.2+ API removal."""
     try:
+        # find_spec locates the package WITHOUT importing it — the unpatched
+        # df/io.py raises ImportError on import, so a plain `import df` here
+        # would fail on the very file we're trying to fix.
         result = subprocess.run(
             [str(_DF_VENV_PYTHON), "-c",
-             "import df, os; print(os.path.dirname(df.__file__))"],
+             "import importlib.util, os; "
+             "spec = importlib.util.find_spec('df'); "
+             "print(os.path.dirname(spec.origin))"],
             capture_output=True, text=True, timeout=10,
         )
         if result.returncode != 0:

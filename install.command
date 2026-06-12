@@ -189,16 +189,42 @@ if ask "Install DeepFilterNet in an isolated virtual environment?"; then
     ok "Rust already installed ($(cargo --version))"
   fi
 
+  # Pick the right Python + torch for this CPU.
+  # PyTorch dropped Intel-Mac wheels after 2.2.2 (and DeepFilterLib ships
+  # Intel wheels only up to Python 3.11), so Intel Macs need py3.11 + pins.
+  ARCH="$(uname -m)"
+  if [ "$ARCH" = "x86_64" ]; then
+    info "Intel Mac detected — DeepFilterNet needs Python 3.11 + torch 2.2.2."
+    DF_PYTHON=""
+    for c in python3.11 /usr/local/bin/python3.11 /usr/local/opt/python@3.11/bin/python3.11; do
+      if command -v "$c" &>/dev/null; then DF_PYTHON="$c"; break; fi
+    done
+    if [ -z "$DF_PYTHON" ]; then
+      info "Installing Python 3.11 via Homebrew…"
+      brew install python@3.11
+      DF_PYTHON="$(brew --prefix)/opt/python@3.11/bin/python3.11"
+    fi
+    TORCH_PKGS="torch==2.2.2 torchaudio==2.2.2"
+  else
+    DF_PYTHON="$PYTHON"
+    TORCH_PKGS="torch torchaudio"
+  fi
+
   DF_VENV="$HOME/.castpolish/df_venv"
   info "Creating isolated venv at $DF_VENV …"
-  "$PYTHON" -m venv --clear "$DF_VENV"
+  "$DF_PYTHON" -m venv --clear "$DF_VENV"
   "$DF_VENV/bin/pip" install --upgrade pip
+  info "Installing PyTorch ($TORCH_PKGS, ~200 MB)…"
+  # shellcheck disable=SC2086  — intentional word-splitting of the pin list
+  "$DF_VENV/bin/pip" install $TORCH_PKGS
   info "Installing deepfilternet (compiling from source — please be patient)…"
   if [ -f "$HOME/.cargo/env" ]; then
     # shellcheck source=/dev/null
     source "$HOME/.cargo/env"
   fi
-  "$DF_VENV/bin/pip" install deepfilternet
+  "$DF_VENV/bin/pip" install deepfilternet soundfile
+  info "Applying torchaudio compatibility patch…"
+  "$PYTHON" -c "import castpolish; castpolish._apply_df_io_patch(print)"
   ok "DeepFilterNet installed in $DF_VENV"
 else
   warn "Skipped DeepFilterNet."

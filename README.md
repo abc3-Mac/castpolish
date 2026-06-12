@@ -21,7 +21,7 @@ Runs entirely on your machine — no cloud, no subscription, no audio ever leave
 | Web UI (`castpolish.py serve`) | ✅ | ✅ | ✅ |
 | Audio processing & loudness normalization | ✅ | ✅ | ✅ |
 | Whisper transcription | ✅ | ✅ | ✅ |
-| Tiered noise reduction (afftdn / noisereduce / DeepFilterNet) | ✅ | ✅ | ✅ |
+| Tiered noise reduction (afftdn / noisereduce / DeepFilterNet) | ✅ \* | ✅ | ✅ |
 | AI shownotes via Ollama | ✅ | ✅ | ✅ |
 | Speaker diarization (pyannote.audio) | ✅ | ✅ | ✅ |
 | In-app install / update buttons | ✅ | ✅ | ✅ |
@@ -30,6 +30,8 @@ Runs entirely on your machine — no cloud, no subscription, no audio ever leave
 | `create_macos_app.py` native `.app` launcher | ✅ | — | — |
 
 Linux and Windows users run `python3 castpolish.py serve` directly and open `http://localhost:8765` — no `.app` needed. All audio processing, transcription, and AI features are fully cross-platform.
+
+\* **Intel Macs:** DeepFilterNet works, but requires Python 3.11 — PyTorch dropped Intel-Mac support after torch 2.2.2, and DeepFilterNet's prebuilt Intel wheels stop at Python 3.11. Both `install.command` and the in-app Install button detect Intel CPUs and handle this automatically (installing `python@3.11` via Homebrew if needed). Apple Silicon Macs use the latest packages with no pins.
 
 ---
 
@@ -118,6 +120,7 @@ DeepFilterNet runs in a dedicated virtual environment at `~/.castpolish/df_venv/
 - Native sample rate: 48 kHz (CastPolish pre-converts your file automatically)
 - Runs on CPU — ~10–60× real-time on Apple Silicon
 - Model (~80 MB) downloads to `~/.cache/DeepFilterNet/` on first use
+- **Intel Macs:** the installer automatically uses Python 3.11 with `torch==2.2.2` (the last PyTorch release with Intel-Mac wheels). Expect slower processing than Apple Silicon, but it works. If the install fails, run `brew install python@3.11` and retry.
 
 ---
 
