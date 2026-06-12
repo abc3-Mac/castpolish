@@ -567,7 +567,12 @@ def _denoise_noisereduce(in_wav: str, out_wav: str, log=None):
             data, rate = sf.read(in_wav, dtype="float32")
             if log:
                 log("Applying dynamic noise reduction (noisereduce)…")
-            # noisereduce expects (channels, samples); soundfile gives (samples, channels)
+            # noisereduce expects (channels, samples); soundfile gives
+            # (samples, channels). DO NOT remove this transpose: without it
+            # noisereduce treats every SAMPLE as a channel and effectively
+            # hangs on stereo input of any length (10 s of audio > 60 s of
+            # compute). That hang is why this path was once downsampled to
+            # 22 kHz mono, degrading published audio.
             multichannel = data.ndim > 1
             if multichannel:
                 data = data.T
