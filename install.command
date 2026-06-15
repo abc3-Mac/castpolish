@@ -118,7 +118,7 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 hdr "Step 5 / 7 — Core Python packages"
 # ─────────────────────────────────────────────────────────────────────────────
-CORE_PKGS=(flask flask-cors pyloudnorm soundfile noisereduce numpy)
+CORE_PKGS=(flask flask-cors pyloudnorm soundfile noisereduce numpy mutagen fpdf2 python-docx)
 
 info "Installing / upgrading: ${CORE_PKGS[*]}"
 "$PYTHON" -m pip install --upgrade "${CORE_PKGS[@]}"
