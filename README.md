@@ -23,6 +23,8 @@ Runs entirely on your machine — no cloud, no subscription, no audio ever leave
 | Whisper transcription | ✅ | ✅ | ✅ |
 | Tiered noise reduction (afftdn / noisereduce / DeepFilterNet) | ✅ \* | ✅ | ✅ |
 | AI shownotes via Ollama | ✅ | ✅ | ✅ |
+| Embedded MP3/M4A chapter markers | ✅ | ✅ | ✅ |
+| PDF & Word (`.docx`) document export | ✅ | ✅ | ✅ |
 | Speaker diarization (pyannote.audio) | ✅ | ✅ | ✅ |
 | In-app install / update buttons | ✅ | ✅ | ✅ |
 | Processing log file | ✅ | ✅ | ✅ |
@@ -48,6 +50,8 @@ Linux and Windows users run `python3 castpolish.py serve` directly and open `htt
 - **Confidence review** — the HTML transcript editor flags words Whisper was unsure about; pick a threshold (50–90 %) and step through flagged words with ‹ › to verify them against the audio. Pairs with the 🎯 High accuracy preset
 - **Cancellable jobs** — a ✕ Cancel button on queued and running jobs stops the pipeline (kills a running ffmpeg/DeepFilterNet immediately) and cleans up partial outputs
 - **AI shownotes** — chapter titles, long summary, brief summary, and tags via [Ollama](https://ollama.com) (local LLM, no API key)
+- **Chapter markers** — detected chapters are embedded directly into the MP3/M4A (ID3 CHAP/CTOC or an ffmpeg remux) so podcast apps show jump points, titled by Ollama when available
+- **PDF & Word documents** — every job also exports a reader-friendly `.pdf` and an editable `.docx`: a title page with the brief summary and tags, the long summary, and the full transcript organized into chapter sections and clean, sentence-split paragraphs. An optional **Enhanced documents** toggle runs a local-LLM grammar cleanup over each paragraph, with a ±15 % word-count guardrail that keeps the original wording if the model drifts
 - **Speaker diarization** — who said what, via pyannote.audio (requires free HuggingFace token)
 - **Processing log** — a `.log` file saved alongside every output detailing all settings, processing steps with timestamps, loudness measurements, and output file sizes
 - **In-app install buttons** — install missing optional packages (noisereduce, pyannote.audio, DeepFilterNet) directly from the Dependencies panel without touching a terminal
@@ -74,7 +78,7 @@ Linux and Windows users run `python3 castpolish.py serve` directly and open `htt
 # 2. Clone and install
 git clone https://github.com/abc3-Mac/castpolish.git
 cd castpolish
-pip install flask flask-cors pyloudnorm soundfile noisereduce numpy
+pip install flask flask-cors pyloudnorm soundfile noisereduce numpy mutagen fpdf2 python-docx
 
 # 3. Optional: Whisper transcription
 pip install faster-whisper
@@ -134,7 +138,7 @@ Every completed job writes a `{title}.log` file alongside the audio, VTT, JSON, 
 
 ```
 ══════════════════════════════════════════════════════════════
-  CastPolish v1.3.0  —  Processing Log
+  CastPolish v1.7.0  —  Processing Log
   Generated : 2026-06-07 15:09:41
 ══════════════════════════════════════════════════════════════
 
@@ -160,7 +164,7 @@ Every completed job writes a `{title}.log` file alongside the audio, VTT, JSON, 
 ══════════════════════════════════════════════════════════════
 ```
 
-A **Log** download link appears in the results table alongside Audio / HTML / JSON / VTT.
+A **Log** download link appears in the results table alongside Audio / HTML / PDF / DOCX / JSON / VTT.
 
 ---
 
@@ -171,8 +175,10 @@ Each processed file produces a folder named after the audio:
 ```
 ~/CastPolish-output/
   My-Episode/
-    My Episode.mp3     ← improved audio (−16 LUFS)
+    My Episode.mp3     ← improved audio (−16 LUFS, embedded chapter markers)
     My Episode.html    ← interactive transcript editor with audio player
+    My Episode.pdf     ← reader-friendly document (summary + chaptered transcript)
+    My Episode.docx    ← editable Word version of the document
     My Episode.vtt     ← WebVTT captions (YouTube-compatible)
     My Episode.json    ← Auphonic-compatible word-level transcript
     My Episode.log     ← processing log (settings, steps, timings)
