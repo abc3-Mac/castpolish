@@ -2420,7 +2420,7 @@ a{color:var(--accent2)}
         <option value="mp3">MP3 (recommended)</option>
         <option value="mp4">MP4 / AAC</option>
       </select>
-      <div class="hint">Audio file format. VTT, JSON &amp; HTML are always produced.</div>
+      <div class="hint">Audio file format. VTT, JSON, HTML, PDF &amp; DOCX are always produced.</div>
     </div>
   </div>
 
@@ -2470,7 +2470,7 @@ a{color:var(--accent2)}
     <div style="display:flex;gap:.5rem;margin-top:.35rem">
       <input type="text" id="output_dir" placeholder="~/CastPolish-output" style="flex:1;font-family:monospace;font-size:.82rem">
     </div>
-    <div class="hint" id="output_dir_status">Where processed files (MP3, VTT, JSON, HTML) are saved. Changes take effect immediately for new jobs.</div>
+    <div class="hint" id="output_dir_status">Where processed files (MP3, VTT, JSON, HTML, PDF, DOCX) are saved. Changes take effect immediately for new jobs.</div>
   </div>
 
   <div style="margin-bottom:1.25rem">
