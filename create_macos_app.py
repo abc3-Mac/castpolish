@@ -304,6 +304,18 @@ def main():
     launcher_sh.write_text(_launcher_sh(SERVER_PORT, PID_FILE, LOG_FILE))
     launcher_sh.chmod(0o755)
     shutil.copy(SERVER_PY, bundled_server)
+    # Bake in the git build stamp — the bundle has no .git, so castpolish.py's
+    # get_build_version() reads this file to show "v1.6.0 (a1b2c3d)" in the app.
+    try:
+        short = subprocess.run(
+            ["git", "-C", str(SCRIPT_DIR), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout.strip()
+        if short:
+            (resources_dir / "build_stamp.txt").write_text(short + "\n")
+            print(f"        Build stamp: {short}")
+    except Exception as exc:
+        print(f"        (build stamp skipped: {exc})")
     print(f"        App compiled.\n")
 
     # 3. Apply custom icon

@@ -3,6 +3,7 @@ faster-whisper>=1.0
 pyloudnorm>=0.1
 soundfile>=0.12
 numpy>=1.24
+mutagen>=1.45      # MP3 ID3 chapter markers (M4A chapters use ffmpeg)
 
 # Optional – speaker diarization (requires HuggingFace token):
 # pyannote.audio>=3.1

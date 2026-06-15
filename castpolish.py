@@ -50,7 +50,57 @@ CONFIG_FILE     = CONFIG_DIR / "config.json"
 _DF_VENV_DIR    = CONFIG_DIR / "df_venv"
 _DF_VENV_PYTHON = _DF_VENV_DIR / "bin" / "python"
 
-__version__ = "1.5.0"
+__version__ = "1.6.0"
+
+_build_version_cache: str | None = None
+
+def get_build_version() -> str:
+    """Full version string for the UI footer, logs, and API — e.g.
+    '1.6.0 (a1b2c3d)', or '1.6.0 (a1b2c3d*)' when the source tree has
+    uncommitted edits, or the bare '1.6.0' when no git info is available.
+
+    Resolution order (mirrors the Liturgical Calendar app):
+      1. A `build_stamp.txt` baked in by create_macos_app.py — the .app ships
+         without a .git directory, so the hash must be embedded at bundle time.
+      2. Live git in a source checkout: `git rev-parse --short HEAD` plus a
+         working-tree dirty check.
+      3. Bare __version__ when neither is available.
+    Resolved once, then cached."""
+    global _build_version_cache
+    if _build_version_cache is not None:
+        return _build_version_cache
+
+    short, dirty = None, False
+    here = Path(__file__).resolve().parent
+
+    # 1. Build stamp embedded in the .app bundle (no .git inside)
+    try:
+        stamp = here / "build_stamp.txt"
+        if stamp.is_file():
+            short = stamp.read_text().strip() or None
+    except Exception:
+        pass
+
+    # 2. Live git when running from the source checkout
+    if not short:
+        try:
+            short = subprocess.run(
+                ["git", "-C", str(here), "rev-parse", "--short", "HEAD"],
+                capture_output=True, text=True, timeout=5,
+            ).stdout.strip() or None
+            if short:
+                status = subprocess.run(
+                    ["git", "-C", str(here), "status", "--porcelain"],
+                    capture_output=True, text=True, timeout=5,
+                ).stdout.strip()
+                dirty = bool(status)
+        except Exception:
+            short = None
+
+    _build_version_cache = (
+        f"{__version__} ({short}{'*' if dirty else ''})" if short else __version__
+    )
+    return _build_version_cache
 
 # Patched df/io.py — replaces torchaudio I/O (removed in torchaudio 2.2+) with soundfile.
 # Applied automatically after every deepfilternet venv install/upgrade.
@@ -227,6 +277,12 @@ try:
 except ImportError:
     HAS_PYANNOTE = False
 
+try:
+    import mutagen  # noqa: F401  — used lazily in embed_chapters()
+    HAS_MUTAGEN = True
+except ImportError:
+    HAS_MUTAGEN = False
+
 # DeepFilterNet runs in an isolated venv (~/.castpolish/df_venv/) to avoid
 # numpy version conflicts with pyannote.audio.
 HAS_DEEPFILTERNET = _DF_VENV_PYTHON.exists()
@@ -240,7 +296,7 @@ def _refresh_optional_deps() -> None:
     Cheap when nothing changed: installed modules hit sys.modules, and a
     missing package fails fast."""
     global np, HAS_NUMPY, sf, HAS_SOUNDFILE, nr, HAS_NOISEREDUCE
-    global PyannotePipeline, HAS_PYANNOTE, HAS_DEEPFILTERNET
+    global PyannotePipeline, HAS_PYANNOTE, HAS_DEEPFILTERNET, HAS_MUTAGEN
     import importlib
     importlib.invalidate_caches()
     if not HAS_NUMPY:
@@ -265,6 +321,12 @@ def _refresh_optional_deps() -> None:
         try:
             from pyannote.audio import Pipeline as _PP
             PyannotePipeline, HAS_PYANNOTE = _PP, True
+        except ImportError:
+            pass
+    if not HAS_MUTAGEN:
+        try:
+            import mutagen as _mutagen  # noqa: F401
+            HAS_MUTAGEN = True
         except ImportError:
             pass
     HAS_DEEPFILTERNET = _DF_VENV_PYTHON.exists()
@@ -1237,6 +1299,127 @@ def detect_chapters_with_titles(segments: list, duration: float,
     return [[start, title] for (start, _), title in zip(chapters_segs, titles)]
 
 
+# ─── Chapter embedding (podcast players show these as jump-to markers) ─────────
+
+def _ffmeta_escape(text: str) -> str:
+    """Escape a value for an ffmetadata file. Per the format spec the special
+    characters '=', ';', '#', '\\' and a newline must be backslash-escaped."""
+    out = []
+    for ch in text:
+        if ch in "=;#\\":
+            out.append("\\" + ch)
+        elif ch == "\n":
+            out.append("\\\n")
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def _embed_chapters_mp3(audio_path: str, spans: list) -> None:
+    """Write ID3 CHAP + CTOC frames so podcast apps show chapter markers.
+    spans: list of (start_sec, end_sec, title). Requires mutagen."""
+    from mutagen.id3 import ID3, CHAP, CTOC, CTOCFlags, TIT2
+    from mutagen.id3 import ID3NoHeaderError
+    try:
+        tags = ID3(audio_path)
+    except ID3NoHeaderError:
+        tags = ID3()
+
+    # Replace any pre-existing chapter table so re-runs don't duplicate frames.
+    tags.delall("CHAP")
+    tags.delall("CTOC")
+
+    child_ids = []
+    for i, (start, end, title) in enumerate(spans):
+        eid = f"chp{i}"
+        child_ids.append(eid)
+        tags.add(CHAP(
+            element_id=eid,
+            start_time=int(start * 1000),
+            end_time=int(end * 1000),
+            sub_frames=[TIT2(encoding=3, text=[title])],
+        ))
+    tags.add(CTOC(
+        element_id="toc",
+        flags=CTOCFlags.TOP_LEVEL | CTOCFlags.ORDERED,
+        child_element_ids=child_ids,
+        sub_frames=[TIT2(encoding=3, text=["Chapters"])],
+    ))
+    tags.save(audio_path)
+
+
+def _embed_chapters_mp4(audio_path: str, spans: list, tmp_dir: str) -> None:
+    """Embed chapters into an MP4/M4A container via an ffmetadata remux.
+    spans: list of (start_sec, end_sec, title). Stream-copies, so no re-encode."""
+    lines = [";FFMETADATA1"]
+    for start, end, title in spans:
+        lines += [
+            "[CHAPTER]",
+            "TIMEBASE=1/1000",
+            f"START={int(start * 1000)}",
+            f"END={int(end * 1000)}",
+            f"title={_ffmeta_escape(title)}",
+        ]
+    meta_path = os.path.join(tmp_dir, "chapters.ffmeta")
+    with open(meta_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+    out_tmp = os.path.join(tmp_dir, "with_chapters" + Path(audio_path).suffix)
+    # -map_metadata 0 keeps the audio's own tags; -map_chapters 1 pulls the
+    # chapter list from the ffmetadata input. Stream copy = lossless + fast.
+    _ffmpeg("-i", audio_path, "-i", meta_path,
+            "-map_metadata", "0", "-map_chapters", "1",
+            "-codec", "copy", out_tmp)
+    os.replace(out_tmp, audio_path)
+
+
+def embed_chapters(audio_path: str, chapters: list, duration: float,
+                   tmp_dir: str, log=None) -> bool:
+    """Embed chapter markers into the output audio file in place.
+
+    chapters: list of [start_sec, title] pairs (sorted by start), as produced
+    by detect_chapters_with_titles. The end of each chapter is the start of the
+    next one; the last runs to `duration`.
+
+    Routes by container: MP3 → ID3 CHAP/CTOC via mutagen; MP4/M4A → ffmpeg
+    ffmetadata remux. Best-effort — any failure leaves the audio untouched and
+    returns False, so a missing dep or odd file never breaks the pipeline.
+    """
+    def info(msg):
+        if log:
+            log(msg)
+
+    if len(chapters) < 2:
+        return False  # a lone whole-file marker isn't worth embedding
+
+    ext = Path(audio_path).suffix.lower()
+    spans = []
+    for i, (start, title) in enumerate(chapters):
+        end = chapters[i + 1][0] if i + 1 < len(chapters) else duration
+        if end <= start:                 # guard against zero/negative spans
+            end = start + 1.0
+        spans.append((float(start), float(end), str(title or f"Chapter {i + 1}")))
+
+    try:
+        if ext == ".mp3":
+            _refresh_optional_deps()
+            if not HAS_MUTAGEN:
+                info("Skipping chapter embedding — install 'mutagen' to add "
+                     "MP3 chapter markers (Dependencies panel).")
+                return False
+            _embed_chapters_mp3(audio_path, spans)
+        elif ext in (".mp4", ".m4a", ".m4b"):
+            _embed_chapters_mp4(audio_path, spans, tmp_dir)
+        else:
+            return False  # wav/flac/etc. — no broadly-supported chapter scheme
+    except Exception as exc:
+        info(f"Chapter embedding failed ({exc}) — audio left unchanged.")
+        return False
+
+    info(f"Embedded {len(spans)} chapter markers into the audio.")
+    return True
+
+
 # ─── Output format generators ─────────────────────────────────────────────────
 
 def to_auphonic_json(segments: list) -> list:
@@ -2007,6 +2190,11 @@ a{color:var(--accent2)}
   </div>
 </div>
 
+<footer style="text-align:center;color:var(--muted);font-size:.72rem;padding:1.5rem 0 .5rem">
+  ⟁ CastPolish <span id="app-version">…</span> · open-source ·
+  <a href="https://github.com/abc3-Mac/castpolish" style="color:var(--muted)">GitHub</a>
+</footer>
+
 </main>
 <script>
 let selectedFile=null;
@@ -2156,13 +2344,17 @@ async function loadDeps(){
     });
   }
 
+  // ── Build version in the page footer ──────────────────────────────────────
+  const ft=document.getElementById('app-version');
+  if(ft&&deps.build_version)ft.textContent='v'+deps.build_version;
+
   renderDeps(deps,{});
 }
 
 function renderDeps(deps,updates){
   const el=document.getElementById('deps');
   el.innerHTML=Object.entries(deps)
-    .filter(([k])=>k!=='noise_modes')
+    .filter(([k])=>k!=='noise_modes'&&k!=='build_version')
     .map(([k,v])=>{
       const upd=updates[k]||{};
       const statusColor=v.ok?'var(--success)':'var(--error)';
@@ -2528,6 +2720,9 @@ def _run_pipeline_inner(input_path: str, output_dir: str, settings: dict,
     log("Writing output files…")
     outputs: dict[str, str] = {"audio": out_audio}
 
+    # Embed chapter markers into the audio so podcast apps show jump points.
+    embed_chapters(out_audio, chapters, duration, tmp_dir, log=log)
+
     vtt_path = os.path.join(output_dir, safe_stem + ".vtt")
     with open(vtt_path, "w", encoding="utf-8") as f:
         f.write(to_vtt(raw_segs))
@@ -2595,7 +2790,7 @@ def _run_pipeline_inner(input_path: str, output_dir: str, settings: dict,
     sep = "═" * 62
     log_lines = [
         sep,
-        f"  CastPolish v{__version__}  —  Processing Log",
+        f"  CastPolish v{get_build_version()}  —  Processing Log",
         f"  Generated : {time.strftime('%Y-%m-%d %H:%M:%S')}",
         sep,
         "",
@@ -2916,6 +3111,7 @@ def make_app(output_dir: str) -> "Flask":
         "pyannote":       ["pyannote.audio"],
         "faster-whisper": ["faster-whisper"],
         "pyloudnorm":     ["pyloudnorm"],
+        "mutagen":        ["mutagen"],
     }
 
     @app.route("/api/install", methods=["POST"])
@@ -2984,6 +3180,7 @@ def make_app(output_dir: str) -> "Flask":
             "soundfile":       (HAS_SOUNDFILE,       "soundfile"),
             "noisereduce":     (HAS_NOISEREDUCE,     "noisereduce"),
             "pyannote.audio":  (HAS_PYANNOTE,        "pyannote.audio"),
+            "mutagen":         (HAS_MUTAGEN,         "mutagen"),
         }
 
         results: dict = {}
@@ -3076,10 +3273,13 @@ def make_app(output_dir: str) -> "Flask":
                                   None if HAS_NOISEREDUCE else "noisereduce"),
             "pyannote.audio": pkg(HAS_PYANNOTE, ver("pyannote.audio"),
                                   None if HAS_PYANNOTE else "pyannote"),
+            "mutagen":        pkg(HAS_MUTAGEN, ver("mutagen"),
+                                  None if HAS_MUTAGEN else "mutagen"),
             "deepfilternet":  pkg(HAS_DEEPFILTERNET,
                                   "isolated venv" if HAS_DEEPFILTERNET else None,
                                   None if HAS_DEEPFILTERNET else "deepfilternet"),
             "noise_modes":    noise_modes,
+            "build_version":  get_build_version(),
         })
 
     return app
