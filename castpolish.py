@@ -50,7 +50,7 @@ CONFIG_FILE     = CONFIG_DIR / "config.json"
 _DF_VENV_DIR    = CONFIG_DIR / "df_venv"
 _DF_VENV_PYTHON = _DF_VENV_DIR / "bin" / "python"
 
-__version__ = "1.6.0"
+__version__ = "1.7.0"
 
 _build_version_cache: str | None = None
 
@@ -283,6 +283,18 @@ try:
 except ImportError:
     HAS_MUTAGEN = False
 
+try:
+    import fpdf  # noqa: F401  — fpdf2, used lazily in render_pdf()
+    HAS_FPDF = True
+except ImportError:
+    HAS_FPDF = False
+
+try:
+    import docx  # noqa: F401  — python-docx, used lazily in render_docx()
+    HAS_DOCX = True
+except ImportError:
+    HAS_DOCX = False
+
 # DeepFilterNet runs in an isolated venv (~/.castpolish/df_venv/) to avoid
 # numpy version conflicts with pyannote.audio.
 HAS_DEEPFILTERNET = _DF_VENV_PYTHON.exists()
@@ -297,6 +309,7 @@ def _refresh_optional_deps() -> None:
     missing package fails fast."""
     global np, HAS_NUMPY, sf, HAS_SOUNDFILE, nr, HAS_NOISEREDUCE
     global PyannotePipeline, HAS_PYANNOTE, HAS_DEEPFILTERNET, HAS_MUTAGEN
+    global HAS_FPDF, HAS_DOCX
     import importlib
     importlib.invalidate_caches()
     if not HAS_NUMPY:
@@ -327,6 +340,18 @@ def _refresh_optional_deps() -> None:
         try:
             import mutagen as _mutagen  # noqa: F401
             HAS_MUTAGEN = True
+        except ImportError:
+            pass
+    if not HAS_FPDF:
+        try:
+            import fpdf as _fpdf  # noqa: F401
+            HAS_FPDF = True
+        except ImportError:
+            pass
+    if not HAS_DOCX:
+        try:
+            import docx as _docx  # noqa: F401
+            HAS_DOCX = True
         except ImportError:
             pass
     HAS_DEEPFILTERNET = _DF_VENV_PYTHON.exists()
@@ -1499,6 +1524,304 @@ def to_txt(segments: list) -> str:
     return "\n".join(lines).strip()
 
 
+# ─── Document export (PDF + DOCX) ─────────────────────────────────────────────
+#
+# A reader-friendly document — title page with the brief summary, a long
+# summary, and the full transcript split into chapter sections and paragraphs.
+# Replaces the user's manual "paste into ChatGPT, ask for a clean PDF" step.
+# Phase 1 (this model + the two renderers) uses NO LLM. Phase 2 is an opt-in
+# per-paragraph Ollama grammar pass guarded by a ±15% word-count check.
+
+_SENTENCE_END = re.compile(r"""[.!?]["'”’)\]]?\s*$""")
+
+
+def _segments_to_paragraphs(segs: list, target_words: int = 90) -> list:
+    """Group consecutive segments into readable paragraphs.
+    Returns [{"speaker": str|None, "text": str}, …].
+
+    A paragraph closes on a hard break (mark_paragraphs set `newpara`, or a
+    speaker change) OR a soft break — once it passes `target_words` and the
+    current segment ends a sentence. Without the soft break a continuous
+    monologue (e.g. a sermon with few long pauses) renders as a few giant
+    wall-of-text blocks. The speaker label is emitted only when it changes from
+    the previous paragraph, so same-speaker soft-splits don't repeat it."""
+    paras: list = []
+    cur: list = []
+    cur_spk = None
+    cur_wc = 0
+    _UNSET = object()
+    last_emitted_spk = _UNSET
+
+    def flush():
+        nonlocal cur, cur_wc, last_emitted_spk
+        if not cur:
+            return
+        spk = cur_spk if cur_spk != last_emitted_spk else None
+        text = re.sub(r"\s{2,}", " ", " ".join(cur)).strip()
+        paras.append({"speaker": spk, "text": text})
+        last_emitted_spk = cur_spk
+        cur, cur_wc = [], 0
+
+    for s in segs:
+        text = (s.get("text") or "").strip()
+        if not text:
+            continue
+        spk = s.get("speaker")
+        if cur and (s.get("newpara") or spk != cur_spk):
+            flush()
+        cur_spk = spk
+        cur.append(text)
+        cur_wc += len(text.split())
+        if cur_wc >= target_words and _SENTENCE_END.search(text):
+            flush()
+    flush()
+    return paras
+
+
+def build_document_model(title: str, segments: list, chapters: list,
+                         shownotes: dict | None = None,
+                         duration: float = 0.0) -> dict:
+    """Assemble the structured model both renderers consume.
+
+    chapters: [[start_seconds, "Title"], …] from detect_chapters_with_titles().
+    Returns {title, brief, long, tags, duration, sections:[{heading, paragraphs}]}.
+    """
+    shownotes = shownotes or {}
+    if chapters:
+        sections = []
+        for ci, (start, heading) in enumerate(chapters):
+            end = chapters[ci + 1][0] if ci + 1 < len(chapters) else float("inf")
+            ch_segs = [s for s in segments if start <= s["start"] < end]
+            paras = _segments_to_paragraphs(ch_segs)
+            if paras:
+                sections.append({"heading": heading, "paragraphs": paras})
+    else:
+        sections = [{"heading": None, "paragraphs": _segments_to_paragraphs(segments)}]
+
+    return {
+        "title":    title,
+        "brief":    (shownotes.get("brief") or "").strip(),
+        "long":     (shownotes.get("long") or "").strip(),
+        "tags":     list(shownotes.get("tags") or []),
+        "duration": duration,
+        "sections": sections,
+    }
+
+
+def _polish_text(text: str, model: str, host: str) -> str:
+    """Phase 2: ask Ollama to fix only grammar/punctuation, never reword.
+    Returns the original text if the model drifts (>15% word-count change),
+    truncates, or errors — the transcript must stay faithful."""
+    orig_wc = len(text.split())
+    if orig_wc < 4:
+        return text
+    prompt = (
+        "Correct only grammar, punctuation, capitalization, and obvious "
+        "speech-to-text errors in the passage below. Do NOT reword, summarize, "
+        "translate, add, or remove content. Keep the same meaning and length. "
+        "Reply with only the corrected passage, nothing else.\n\n"
+        f"{text}"
+    )
+    try:
+        out = ollama_generate(prompt, model, host,
+                              num_predict=int(orig_wc * 2) + 64, timeout=120).strip()
+    except JobCancelled:
+        raise
+    except Exception:
+        return text
+    # Strip a stray wrapping the model sometimes adds.
+    out = out.strip().strip('"').strip()
+    if not out:
+        return text
+    new_wc = len(out.split())
+    if abs(new_wc - orig_wc) > 0.15 * orig_wc:
+        return text
+    return out
+
+
+def polish_document_grammar(doc: dict, model: str, host: str, log=None) -> None:
+    """Run _polish_text over every paragraph in place (phase 2). Cancellable."""
+    total = sum(len(s["paragraphs"]) for s in doc["sections"])
+    done = 0
+    for sec in doc["sections"]:
+        for p in sec["paragraphs"]:
+            _check_cancel()
+            p["text"] = _polish_text(p["text"], model, host)
+            done += 1
+            if log and total and done % 10 == 0:
+                log(f"  Grammar cleanup: {done}/{total} paragraphs")
+
+
+# Unicode-capable fonts to register with fpdf2 (its core fonts are latin-1 only,
+# so a non-English transcript or a smart-quote would otherwise be mangled). We
+# probe for a system TTF; if none is found we fall back to core Helvetica with
+# ASCII transliteration. (regular, bold) — italic is skipped to keep it simple.
+_PDF_FONT_CANDIDATES = [
+    ("/System/Library/Fonts/Supplemental/Arial.ttf",
+     "/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
+    ("/Library/Fonts/Arial.ttf", "/Library/Fonts/Arial Bold.ttf"),
+    ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+    ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
+]
+
+_LATIN_FALLBACK = {
+    "‘": "'", "’": "'", "“": '"', "”": '"',
+    "–": "-", "—": "--", "…": "...", " ": " ",
+    "•": "*", "′": "'", "″": '"',
+}
+
+
+def _latinize(text: str) -> str:
+    """Best-effort downgrade to latin-1 for the core-font fallback path."""
+    for k, v in _LATIN_FALLBACK.items():
+        text = text.replace(k, v)
+    return text.encode("latin-1", "replace").decode("latin-1")
+
+
+def render_pdf(doc: dict, out_path: str) -> None:
+    """Render the document model to a PDF via fpdf2."""
+    from fpdf import FPDF
+
+    # Points so set_font sizes and line heights share one unit (the mm default
+    # would make a "16" line height ~45pt — triple-spaced).
+    pdf = FPDF(unit="pt", format="letter")
+    pdf.set_margins(54, 54, 54)          # 0.75" margins
+    pdf.set_auto_page_break(True, margin=54)
+
+    family, uni = "Helvetica", False
+    for reg, bold in _PDF_FONT_CANDIDATES:
+        if os.path.exists(reg):
+            try:
+                pdf.add_font("doc", "", reg)
+                pdf.add_font("doc", "B", bold if os.path.exists(bold) else reg)
+                family, uni = "doc", True
+                break
+            except Exception:
+                continue
+
+    def T(s: str) -> str:
+        return s if uni else _latinize(s)
+
+    # ── Title page ────────────────────────────────────────────────────────────
+    pdf.add_page()
+    pdf.ln(170)
+    pdf.set_font(family, "B", 24)
+    pdf.multi_cell(0, 30, T(doc["title"]), align="C")
+    pdf.ln(18)
+    if doc["brief"]:
+        pdf.set_font(family, "", 12)
+        pdf.multi_cell(0, 17, T(doc["brief"]), align="C")
+        pdf.ln(14)
+    if doc["tags"]:
+        pdf.set_font(family, "", 9)
+        pdf.set_text_color(120, 120, 120)
+        pdf.multi_cell(0, 13, T(", ".join(doc["tags"])), align="C")
+        pdf.set_text_color(0, 0, 0)
+
+    # ── Long summary ──────────────────────────────────────────────────────────
+    if doc["long"]:
+        pdf.add_page()
+        pdf.set_font(family, "B", 16)
+        pdf.multi_cell(0, 22, T("Summary"))
+        pdf.ln(8)
+        pdf.set_font(family, "", 11)
+        for para in doc["long"].split("\n"):
+            para = para.strip()
+            if para:
+                pdf.multi_cell(0, 15, T(para), align="L")
+                pdf.ln(8)
+
+    # ── Transcript ────────────────────────────────────────────────────────────
+    pdf.add_page()
+    pdf.set_font(family, "B", 18)
+    pdf.multi_cell(0, 24, T("Transcript"))
+    pdf.ln(8)
+    for sec in doc["sections"]:
+        if sec["heading"]:
+            pdf.ln(6)
+            pdf.set_font(family, "B", 13)
+            pdf.multi_cell(0, 18, T(sec["heading"]))
+            pdf.ln(4)
+        pdf.set_font(family, "", 11)
+        for p in sec["paragraphs"]:
+            label = f"{p['speaker']}: " if p.get("speaker") else ""
+            pdf.multi_cell(0, 15, T(label + p["text"]), align="L")
+            pdf.ln(8)
+
+    pdf.output(out_path)
+
+
+def render_docx(doc: dict, out_path: str) -> None:
+    """Render the document model to a Word .docx via python-docx."""
+    from docx import Document
+
+    d = Document()
+    d.add_heading(doc["title"], level=0)
+    if doc["brief"]:
+        d.add_paragraph(doc["brief"])
+    if doc["tags"]:
+        p = d.add_paragraph()
+        r = p.add_run(", ".join(doc["tags"]))
+        r.italic = True
+
+    if doc["long"]:
+        d.add_page_break()
+        d.add_heading("Summary", level=1)
+        for para in doc["long"].split("\n"):
+            para = para.strip()
+            if para:
+                d.add_paragraph(para)
+
+    d.add_page_break()
+    d.add_heading("Transcript", level=1)
+    for sec in doc["sections"]:
+        if sec["heading"]:
+            d.add_heading(sec["heading"], level=2)
+        for p in sec["paragraphs"]:
+            par = d.add_paragraph()
+            if p.get("speaker"):
+                run = par.add_run(f"{p['speaker']}: ")
+                run.bold = True
+            par.add_run(p["text"])
+
+    d.save(out_path)
+
+
+def write_documents(doc: dict, output_dir: str, safe_stem: str,
+                    outputs: dict, log=None) -> None:
+    """Best-effort PDF + DOCX export. Mirrors embed_chapters(): a missing
+    optional package or any renderer error is logged and skipped, never fatal."""
+    def info(m):
+        if log:
+            log(m)
+
+    _refresh_optional_deps()
+
+    if HAS_FPDF:
+        try:
+            pdf_path = os.path.join(output_dir, safe_stem + ".pdf")
+            render_pdf(doc, pdf_path)
+            outputs["pdf"] = pdf_path
+            info(f"PDF document written → {safe_stem}.pdf")
+        except Exception as exc:
+            info(f"⚠️ PDF export failed: {exc}")
+    else:
+        info("Skipping PDF export — install 'fpdf2' to enable it.")
+
+    if HAS_DOCX:
+        try:
+            docx_path = os.path.join(output_dir, safe_stem + ".docx")
+            render_docx(doc, docx_path)
+            outputs["docx"] = docx_path
+            info(f"DOCX document written → {safe_stem}.docx")
+        except Exception as exc:
+            info(f"⚠️ DOCX export failed: {exc}")
+    else:
+        info("Skipping DOCX export — install 'python-docx' to enable it.")
+
+
 def _vtt_ts(s: float) -> str:
     # Quantize to integer ms BEFORE splitting: float arithmetic on values
     # like 3599.9996 otherwise yields a seconds field of "60.000", which
@@ -2125,6 +2448,10 @@ a{color:var(--accent2)}
       <input type="checkbox" id="diarize">
       <span>Speaker diarization <span style="color:var(--muted);font-size:.75rem">(requires pyannote.audio + HF_TOKEN)</span></span>
     </div>
+    <div class="toggle-row">
+      <input type="checkbox" id="enhance_docs">
+      <span>Enhanced documents <span style="color:var(--muted);font-size:.75rem">(clean up grammar in PDF/DOCX via Ollama — slower)</span></span>
+    </div>
   </div>
 
   <button class="submit-btn" id="submitbtn" onclick="submitJob()" disabled>Submit</button>
@@ -2260,6 +2587,7 @@ async function submitJob(){
   fd.append('normalize',document.getElementById('normalize').checked?'1':'0');
   fd.append('noise_mode',document.getElementById('noise_mode').value);
   fd.append('diarize',document.getElementById('diarize').checked?'1':'0');
+  fd.append('enhance_docs',document.getElementById('enhance_docs').checked?'1':'0');
   fd.append('initial_prompt',document.getElementById('initial_prompt').value);
   try{
     const r=await fetch('/api/process',{method:'POST',body:fd});
@@ -2295,13 +2623,13 @@ function renderJobs(jobs){
     const sc={'queued':'s-queued','processing':'s-processing','done':'s-done','error':'s-error','cancelled':'s-cancelled'}[j.status]||'s-queued';
     const ts=j.started?new Date(j.started*1000).toLocaleTimeString():(j.created?new Date(j.created*1000).toLocaleTimeString():'—');
     const dur=j.finished&&j.started?fmtDuration(j.finished-j.started):(j.status==='processing'?'running…':'—');
+    const DL_LBL={audio:'Audio',html:'HTML',pdf:'PDF',docx:'DOCX',json:'JSON',vtt:'VTT',log:'Log'};
+    const DL_ORDER=['audio','html','pdf','docx','json','vtt','log'];
+    const keys=j.output_keys&&j.output_keys.length?j.output_keys:['audio','html','json','vtt','log'];
+    const dl=DL_ORDER.filter(k=>keys.includes(k))
+      .map(k=>` <a class="job-link" href="/download/${j.id}/${k}">${DL_LBL[k]}</a>`).join('');
     const links=j.status==='done'
-      ?`<a class="job-link" href="/results/${j.id}" target="_blank">View</a>`
-      +` <a class="job-link" href="/download/${j.id}/audio">Audio</a>`
-      +` <a class="job-link" href="/download/${j.id}/html">HTML</a>`
-      +` <a class="job-link" href="/download/${j.id}/json">JSON</a>`
-      +` <a class="job-link" href="/download/${j.id}/vtt">VTT</a>`
-      +` <a class="job-link" href="/download/${j.id}/log">Log</a>`
+      ?`<a class="job-link" href="/results/${j.id}" target="_blank">View</a>`+dl
       :(j.status==='processing'||j.status==='queued')
         ?`<button class="mini-btn cancel-btn" onclick="cancelJob('${j.id}')">✕ Cancel</button>`
         :'—';
@@ -2612,12 +2940,14 @@ def run_pipeline(input_path: str, output_dir: str, settings: dict,
 def _run_pipeline_inner(input_path: str, output_dir: str, settings: dict,
                         job_id: str | None, tmp_dir: str) -> dict:
     """
-    Runs the full processing pipeline. Returns dict of output file paths.
-    Produces exactly 4 outputs (matching Auphonic):
+    Runs the full processing pipeline. Returns dict of output file paths:
       {title}.mp3 / .mp4  — improved audio
       {title}.vtt          — YouTube-compatible closed captions
       {title}.json         — word-level transcript (Auphonic format)
       {title}.html         — self-contained interactive transcript editor
+      {title}.pdf          — reader-friendly document (summary + transcript)
+      {title}.docx         — same document as an editable Word file
+    PDF/DOCX are best-effort (skipped if fpdf2 / python-docx aren't installed).
 
     settings keys: model, language, task, normalize,
                    noise_mode (none|afftdn|noisereduce|deepfilternet),
@@ -2753,6 +3083,16 @@ def _run_pipeline_inner(input_path: str, output_dir: str, settings: dict,
         f.write(html)
     outputs["html"] = html_path
 
+    # ── Document exports (PDF + DOCX) ─────────────────────────────────────────
+    doc_model = build_document_model(
+        title=stem, segments=raw_segs, chapters=chapters,
+        shownotes=shownotes, duration=duration,
+    )
+    if settings.get("enhance_docs") and ollama_model:
+        log("Polishing document grammar with Ollama (this is slower)…")
+        polish_document_grammar(doc_model, ollama_model, ollama_host, log=log)
+    write_documents(doc_model, output_dir, safe_stem, outputs, log=log)
+
     log(f"Done — {len(raw_segs)} segments, {len(chapters)} chapters.")
 
     # ── 7. Write processing log file ─────────────────────────────────────────
@@ -2886,6 +3226,7 @@ def make_app(output_dir: str) -> "Flask":
             "normalize":  request.form.get("normalize", "1") == "1",
             "noise_mode": request.form.get("noise_mode", "none"),
             "diarize":    request.form.get("diarize", "0") == "1",
+            "enhance_docs": request.form.get("enhance_docs", "0") == "1",
             "lufs":      _parse_lufs(request.form.get("lufs")),
             "initial_prompt": (request.form.get("initial_prompt") or "")[:600],
             "title":     title,
@@ -2966,8 +3307,12 @@ def make_app(output_dir: str) -> "Flask":
     def _job_view(j: dict) -> dict:
         # Copy the mutable members while holding the lock — the worker thread
         # appends to "log" while jsonify would otherwise iterate the live list
-        return {k: (list(v) if k == "log" else dict(v) if k == "settings" else v)
+        view = {k: (list(v) if k == "log" else dict(v) if k == "settings" else v)
                 for k, v in j.items() if k != "outputs"}
+        # Expose just the keys (not the absolute paths) so the UI can render a
+        # download link per produced file — PDF/DOCX only appear when generated.
+        view["output_keys"] = list(j.get("outputs", {}).keys())
+        return view
 
     @app.route("/api/jobs")
     def api_jobs():
@@ -3112,6 +3457,8 @@ def make_app(output_dir: str) -> "Flask":
         "faster-whisper": ["faster-whisper"],
         "pyloudnorm":     ["pyloudnorm"],
         "mutagen":        ["mutagen"],
+        "fpdf2":          ["fpdf2"],
+        "python-docx":    ["python-docx"],
     }
 
     @app.route("/api/install", methods=["POST"])
@@ -3181,6 +3528,8 @@ def make_app(output_dir: str) -> "Flask":
             "noisereduce":     (HAS_NOISEREDUCE,     "noisereduce"),
             "pyannote.audio":  (HAS_PYANNOTE,        "pyannote.audio"),
             "mutagen":         (HAS_MUTAGEN,         "mutagen"),
+            "fpdf2":           (HAS_FPDF,            "fpdf2"),
+            "python-docx":     (HAS_DOCX,            "python-docx"),
         }
 
         results: dict = {}
@@ -3275,6 +3624,10 @@ def make_app(output_dir: str) -> "Flask":
                                   None if HAS_PYANNOTE else "pyannote"),
             "mutagen":        pkg(HAS_MUTAGEN, ver("mutagen"),
                                   None if HAS_MUTAGEN else "mutagen"),
+            "fpdf2":          pkg(HAS_FPDF, ver("fpdf2"),
+                                  None if HAS_FPDF else "fpdf2"),
+            "python-docx":    pkg(HAS_DOCX, ver("python-docx"),
+                                  None if HAS_DOCX else "python-docx"),
             "deepfilternet":  pkg(HAS_DEEPFILTERNET,
                                   "isolated venv" if HAS_DEEPFILTERNET else None,
                                   None if HAS_DEEPFILTERNET else "deepfilternet"),

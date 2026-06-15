@@ -4,6 +4,8 @@ pyloudnorm>=0.1
 soundfile>=0.12
 numpy>=1.24
 mutagen>=1.45      # MP3 ID3 chapter markers (M4A chapters use ffmpeg)
+fpdf2>=2.7         # PDF document export (transcript + summaries)
+python-docx>=1.1   # Word (.docx) document export
 
 # Optional – speaker diarization (requires HuggingFace token):
 # pyannote.audio>=3.1
