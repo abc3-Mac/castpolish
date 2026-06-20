@@ -50,7 +50,7 @@ CONFIG_FILE     = CONFIG_DIR / "config.json"
 _DF_VENV_DIR    = CONFIG_DIR / "df_venv"
 _DF_VENV_PYTHON = _DF_VENV_DIR / "bin" / "python"
 
-__version__ = "1.7.0"
+__version__ = "1.7.1"
 
 _build_version_cache: str | None = None
 
@@ -1032,20 +1032,27 @@ def transcribe(wav_path: str, model_size: str = "small",
     return segs, detected
 
 
-def diarize(wav_path: str, hf_token: str, num_speakers: int | None = None,
-            log=None) -> dict:
-    """Returns {speaker_id: [(start, end), ...]}. Requires pyannote.audio."""
-    if not HAS_PYANNOTE:
-        raise RuntimeError("pyannote.audio not installed: pip install pyannote.audio")
-    import torch as _torch
-    if _torch.backends.mps.is_available():
-        device = _torch.device("mps")
-    elif _torch.cuda.is_available():
-        device = _torch.device("cuda")
-    else:
-        device = _torch.device("cpu")
-    if log:
-        log(f"Running speaker diarization on {device}…")
+def _resolve_diarize_device(_torch, pref: str):
+    """Map a device preference to an available torch.device.
+
+    pref: "cpu" | "mps" | "cuda" | "auto". Unknown/unavailable choices fall
+    back to CPU. CPU is the default because pyannote on Apple MPS is unstable
+    for long audio — the Metal compiler service can drop mid-run and abort the
+    whole process (SIGABRT), which no try/except can catch."""
+    pref = (pref or "cpu").lower()
+    if pref == "mps" and _torch.backends.mps.is_available():
+        return _torch.device("mps")
+    if pref == "cuda" and _torch.cuda.is_available():
+        return _torch.device("cuda")
+    if pref == "auto":
+        if _torch.backends.mps.is_available():
+            return _torch.device("mps")
+        if _torch.cuda.is_available():
+            return _torch.device("cuda")
+    return _torch.device("cpu")
+
+
+def _run_diarization(wav_path, hf_token, device, num_speakers):
     pipeline = PyannotePipeline.from_pretrained(
         "pyannote/speaker-diarization-3.1", token=hf_token
     )
@@ -1058,6 +1065,31 @@ def diarize(wav_path: str, hf_token: str, num_speakers: int | None = None,
     for turn, _, speaker in annotation.itertracks(yield_label=True):
         out.setdefault(speaker, []).append((turn.start, turn.end))
     return out
+
+
+def diarize(wav_path: str, hf_token: str, num_speakers: int | None = None,
+            log=None, device_pref: str | None = None) -> dict:
+    """Returns {speaker_id: [(start, end), ...]}. Requires pyannote.audio.
+
+    device_pref selects the compute device ("cpu"/"mps"/"cuda"/"auto"); when
+    None it is read from config (diarize_device), defaulting to "cpu". If a GPU
+    run raises a recoverable error, we retry once on CPU."""
+    if not HAS_PYANNOTE:
+        raise RuntimeError("pyannote.audio not installed: pip install pyannote.audio")
+    import torch as _torch
+    if device_pref is None:
+        device_pref = load_config().get("diarize_device", "cpu")
+    device = _resolve_diarize_device(_torch, device_pref)
+    if log:
+        log(f"Running speaker diarization on {device}…")
+    try:
+        return _run_diarization(wav_path, hf_token, device, num_speakers)
+    except Exception as exc:
+        if device.type == "cpu":
+            raise
+        if log:
+            log(f"⚠️ Diarization failed on {device} ({exc}); retrying on CPU…")
+        return _run_diarization(wav_path, hf_token, _torch.device("cpu"), num_speakers)
 
 
 def assign_speakers(segments: list, diarization: dict) -> list:
@@ -2450,7 +2482,7 @@ a{color:var(--accent2)}
     </div>
     <div class="toggle-row">
       <input type="checkbox" id="enhance_docs">
-      <span>Enhanced documents <span style="color:var(--muted);font-size:.75rem">(clean up grammar in PDF/DOCX via Ollama — slower)</span></span>
+      <span>Enhanced documents <span style="color:var(--muted);font-size:.75rem">(Ollama grammar cleanup, one pass per paragraph — much slower; can add 30+ min on long files. PDF/DOCX are still produced when off.)</span></span>
     </div>
   </div>
 

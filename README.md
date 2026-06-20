@@ -138,7 +138,7 @@ Every completed job writes a `{title}.log` file alongside the audio, VTT, JSON, 
 
 ```
 ══════════════════════════════════════════════════════════════
-  CastPolish v1.7.0  —  Processing Log
+  CastPolish v1.7.1  —  Processing Log
   Generated : 2026-06-07 15:09:41
 ══════════════════════════════════════════════════════════════
 
@@ -220,8 +220,25 @@ Requires a free [HuggingFace](https://huggingface.co) account and accepting the 
 pip install pyannote.audio
 ```
 
-Enter your HuggingFace token in Settings → enable Diarization in the UI.  
-Uses Apple Metal (MPS) on Apple Silicon automatically for faster processing.
+Enter your HuggingFace token in Settings → enable Diarization in the UI.
+
+### Diarization device
+
+The diarization device is configurable via `diarize_device` in `~/.castpolish/config.json`:
+
+| Value | Behaviour |
+|-------|-----------|
+| `cpu` *(default)* | Run on CPU. Slower than GPU but **stable** — recommended for long files. |
+| `mps` | Apple Metal (Apple Silicon). Faster, but can be unstable on long audio. |
+| `cuda` | NVIDIA GPU. |
+| `auto` | Prefer MPS → CUDA → CPU. |
+
+CPU is the default because pyannote on Apple **MPS can crash on long recordings**:
+the Metal compiler service occasionally drops mid-run, raising a `failed assertion`
+in `MPSKernelDAG.mm` that aborts the whole process (`SIGABRT`) — which Python
+cannot catch. On a ~2.5 hour file this surfaces partway through the diarization
+pass. If you set the device to `mps`/`cuda`/`auto` and a **recoverable** error
+occurs, CastPolish logs a warning and automatically retries that run on CPU.
 
 ---
 
@@ -278,6 +295,10 @@ Settings saved to `~/.castpolish/config.json`. Configure via the web UI Settings
 - Target loudness (LUFS)
 - Ollama host and model
 - HuggingFace token (for diarization)
+
+Edited directly in `config.json` (no UI control yet):
+
+- `diarize_device` — `cpu` *(default)* / `mps` / `cuda` / `auto`. See [Diarization device](#diarization-device).
 
 ---
 
