@@ -25,7 +25,7 @@ paras = [p.strip() for p in (VO / "vo-only.txt").read_text().split("\n\n") if p.
 names = ["01-open", "02-strike", "03-cell", "04-romans", "05-door", "06-montage", "08-invite"]
 assert len(paras) == len(names), f"expected {len(names)} narration paragraphs, found {len(paras)}"
 segments = list(zip(names, paras)) + [
-    ("07-pastor", "Five hundred years later, the question hasn't changed: Am I enough? The honest answer is no — and that's the good news, because Jesus is. It was never about Luther. It's about Christ, for you. You are forgiven. You are free to love your neighbor."),
+    ("07-pastor", "Five hundred years later, the question is the same: Am I enough? The honest answer is no — but Jesus is. You are forgiven, and you are free to love your neighbor."),
     ("09-end", "Come meet the Jesus Luther found. We'll save you a seat."),
 ]
 
@@ -36,7 +36,7 @@ def speakable(t):
 
 def tts(text, prev, nxt):
     body = {"text": text, "model_id": "eleven_multilingual_v2",
-            "voice_settings": {"stability": 0.5, "similarity_boost": 0.8, "style": 0.0, "use_speaker_boost": True}}
+            "voice_settings": {"stability": 0.5, "similarity_boost": 0.8, "style": 0.0, "use_speaker_boost": True, "speed": 1.08}}
     if prev: body["previous_text"] = prev[-600:]
     if nxt: body["next_text"] = nxt[:600]
     u = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE}?output_format=mp3_44100_128"

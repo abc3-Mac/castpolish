@@ -5,7 +5,7 @@
 **Online:** facebook.com/stpaultroyil · youtube.com/c/StPaulsTroyIL · instagram.com/saintpaulstroy · logo: saintpaulstroy.org/wp-content/uploads/2021/04/stp-logo-nofooter.jpeg. The Weekly Worship page confirms Sat 5 PM / Sun 9 AM; the About page still shows older times (Sat 6, Sun 8 & 10:30), so double-check the Bible class time.
 **Format:** Vertical 9:16, 4K (2160 x 3840), 24 or 30 fps, stereo 48 kHz
 **Target length:** 85–88 seconds (hard cap 90 s so it posts as a Facebook Reel)
-**Word budget:** ~210 words total (VO + on-camera) at ~150 wpm, leaving room for SFX beats
+**Word budget:** ~184 words total (VO + on-camera) at ~150 wpm, leaving room for SFX beats
 **Services promoted:** Sat 5:00 PM · Sun 9:00 AM · Bible class Sun 10:30 AM, church basement
 **Throughline:** Luther is the way in; Jesus is the point. From the cell onward every segment names or shows Christ, so the video is about the gospel Luther found, not about Luther.
 **Dates assumed:** Sat Oct 24 / Sun Oct 25, 2026 (Reformation Sunday). Confirm before posting.
@@ -31,9 +31,9 @@ Legend: **VO** = ElevenLabs narration · **PASTOR** = on-camera, recorded in the
 | 0:36–0:44 | Fast montage (1 s each): a German Bible, a hymnal open to "A Mighty Fortress", a family at a kitchen table, a child reading a catechism, an altar cross in daylight, YOUR Wittenberg town photos. | *MUSIC: tempo lifts, hopeful.* |
 | | | **VO:** "Soon ordinary people had a Bible in their own language — and met Jesus in it for themselves." |
 | 0:44–0:62 | **PASTOR ON CAMERA.** Sanctuary, altar soft-focused behind, daylight from windows. Medium shot, eyes to lens. Small caption lower third: **Pastor Albert Collver · Saint Paul's Lutheran, Troy, IL** | *MUSIC: ducks to barely audible under speech.* |
-| | | **PASTOR:** "Five hundred years later, the question hasn't changed: *Am I enough?* The honest answer is no — and that's the good news, because Jesus is. It was never about Luther. It's about Christ, for you. You are forgiven. You are free to love your neighbor." |
+| | | **PASTOR:** "Five hundred years later, the question is the same: *Am I enough?* The honest answer is no — but Jesus is. You are forgiven, and you are free to love your neighbor." |
 | 0:62–0:78 | Church exterior in Troy: steeple, sign, front doors opening, candles being lit, a hymnal handed to someone, coffee in the basement classroom, a few friendly faces. Caption builds line by line: **Saturday 5 PM · Sunday 9 AM · Bible Class 10:30 AM** | *SFX: church bell, one or two strikes. MUSIC: "A Mighty Fortress" melody enters clearly.* |
-| | | **VO:** "Celebrate the Reformation at Saint Paul's Lutheran Church in Troy: Saturday at 5 PM or Sunday at 9 AM, Bible class at 10:30 in the church basement. Members, neighbors, the curious — all are welcome." |
+| | | **VO:** "Join us at Saint Paul's Lutheran in Troy — Saturday at 5, Sunday at 9, Bible class at 10:30. Everyone is welcome." |
 | 0:78–0:88 | END CARD (hold 8–10 s): church logo/name, **Reformation Weekend**, times, **112 N. Border St., Troy, IL**, **saintpaulstroy.org** or a QR code. Optional: pastor on camera for the last line, then cut to card. | *MUSIC: "A Mighty Fortress" organ swell, final chord rings out and fades.* |
 | | | **PASTOR (on camera or VO):** "Come meet the Jesus Luther found. We'll save you a seat." |
 
@@ -53,13 +53,13 @@ Legend: **VO** = ElevenLabs narration · **PASTOR** = on-camera, recorded in the
 >
 > Soon ordinary people had a Bible in their own language — and met Jesus in it for themselves.
 >
-> **[PASTOR]** Five hundred years later, the question hasn't changed: Am I enough? The honest answer is no — and that's the good news, because Jesus is. It was never about Luther. It's about Christ, for you. You are forgiven. You are free to love your neighbor.
+> **[PASTOR]** Five hundred years later, the question is the same: Am I enough? The honest answer is no — but Jesus is. You are forgiven, and you are free to love your neighbor.
 >
-> Celebrate the Reformation at Saint Paul's Lutheran Church in Troy: Saturday at 5 PM or Sunday at 9 AM, Bible class at 10:30 in the church basement. Members, neighbors, the curious — all are welcome.
+> Join us at Saint Paul's Lutheran in Troy — Saturday at 5, Sunday at 9, Bible class at 10:30. Everyone is welcome.
 >
 > **[PASTOR]** Come meet the Jesus Luther found. We'll save you a seat.
 
-Word count: 210. Read at a measured pace, that lands at about 84 s of speech; SFX beats and the end card bring it to roughly 88 s.
+Word count: 184. Read at a measured pace, that lands at about 74 s of speech; SFX beats and the end card bring it to roughly 88 s.
 
 ---
 
@@ -67,8 +67,10 @@ Word count: 210. Read at a measured pace, that lands at about 84 s of speech; SF
 
 Drop these in order until it fits:
 1. Cut the 0:36–0:44 montage line ("Soon ordinary people had…") — saves ~7 s.
-2. Trim the pastor segment to: "Five hundred years later, the question is the same: Am I enough? The honest answer is no — but Jesus is. You are forgiven, and you are free to love your neighbor." — saves ~6 s.
-3. Shorten the invitation to: "Join us at Saint Paul's Lutheran in Troy — Saturday at 5, Sunday at 9, Bible class at 10:30. Everyone is welcome." — saves ~6 s.
+2. ✅ Applied 18 Oct 2026 (pastor segment shortened; the longer version — "…and that's the good news, because Jesus is. It was never about Luther. It's about Christ, for you…" — is in git history if the read comes in fast).
+3. ✅ Applied 18 Oct 2026 (invitation shortened).
+
+Measured 18 Oct with the pastor's ElevenLabs clone at natural pace: the full 210-word script ran 112 s; cuts 2 and 3 plus a slightly brisker read bring it under 90 s.
 
 ---
 

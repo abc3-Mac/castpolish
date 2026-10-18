@@ -101,6 +101,8 @@ Tips: ask for 2–3 variations of G2 (the strike) — it's the money shot. If Gr
 
 ## 5. Music and sound effects
 
+**Music plan (18 Oct 2026):** Luther hymns on pipe organ. First choice: the church organist recorded on the phone — "A Mighty Fortress" straight, plus a quiet verse of "Out of the Depths" (Aus tiefer Not) or "Dear Christians, One and All, Rejoice" for the storm and the cell. Stand-in until then: `python3 06-music-sfx/gen_underscore.py` makes an original organ piece in the chorale idiom with the ElevenLabs Music API (it does not quote the real tunes), and `make_animatic.py` ducks it under the voice. Cue map: silence and rain on the open; low pedal enters in the cell; warm resolution on Romans; the chorale enters clearly under the invitation and swells on the end card.
+
 **Music plan (three moods, one track if possible):**
 - 0:00–0:19: none, then a single low sustained note (cello/organ pedal) from 0:10.
 - 0:19–0:44: warm resolution, slow build, strings or soft piano.

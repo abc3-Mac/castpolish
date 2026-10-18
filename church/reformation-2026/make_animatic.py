@@ -3,11 +3,11 @@
 and the ElevenLabs narration (02-vo/<segment>.mp3; falls back to macOS `say` if a file is missing).
 
 Still placeholders: the pastor's on-camera segment and the Troy B-roll (red STAND-IN bands).
-No music yet.
+Music: 06-music-sfx/organ-underscore-v1.mp3 (ElevenLabs Music stand-in) ducked under the voice.
 
 Usage:  python3 make_animatic.py            # 1080x1920 draft
         python3 make_animatic.py --4k       # 2160x3840
-Output: 07-edit/animatic/animatic-v2.mp4 and animatic-v2-timing.txt
+Output: 07-edit/animatic/animatic-v3.mp4 and animatic-v3-timing.txt
 """
 import subprocess, sys, pathlib, textwrap, shutil
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -52,9 +52,9 @@ S = [
    ("grok:G7c-singing/G7c-singing-v1.jpg", "", "", 0.0, "in"),
    ("grok:G7d-altar-cross/G7d-altar-cross-v1.jpg", "", "", 0.0, "in"),
    ("google-album-wittenberg-2010/029_IMG_0853.jpg", "", "", 0.05, "out")], 0.3),
- ("07-pastor", PASTOR_VOICE, "Five hundred years later, the question hasn't changed: Am I enough? The honest answer is no — and that's the good news, because Jesus is. It was never about Luther. It's about Christ, for you. You are forgiven. You are free to love your neighbor.",
+ ("07-pastor", PASTOR_VOICE, "Five hundred years later, the question is the same: Am I enough? The honest answer is no — but Jesus is. You are forgiven, and you are free to love your neighbor.",
   [("google-album-wittenberg-2010/012_IMG_0804.jpg", "Pastor Albert Collver · Saint Paul's Lutheran, Troy, IL", "PASTOR ON CAMERA — record in the sanctuary, altar behind, eyes to lens (voice is a clone stand-in)", 0.5, "none")], 0.35),
- ("08-invite", VO_VOICE, "Celebrate the Reformation at Saint Paul's Lutheran Church in Troy: Saturday at 5 PM or Sunday at 9 AM, Bible class at 10:30 in the church basement. Members, neighbors, the curious — all are welcome.",
+ ("08-invite", VO_VOICE, "Join us at Saint Paul's Lutheran in Troy — Saturday at 5, Sunday at 9, Bible class at 10:30. Everyone is welcome.",
   [(None, "Saturday 5 PM\nSunday 9 AM\nBible Class 10:30 AM", "Troy B-roll: steeple, sign, doors opening, candles, coffee, faces — placeholder", 0, "none")], 0.3),
  ("09-end", PASTOR_VOICE, "Come meet the Jesus Luther found. We'll save you a seat.",
   [(None, "Saint Paul's Lutheran Church\nREFORMATION WEEKEND\n\nSaturday 5 PM · Sunday 9 AM\nBible Class 10:30 AM\n\n112 N. Border St, Troy, IL\nsaintpaulstroy.org", "", 0, "none")], 6.0),
@@ -175,10 +175,23 @@ for name, voice, line, shots, pad in S:
          "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-shortest", str(out)])
     timing.append((name, t, total, vo, source)); t += total; seg_files.append(out)
 
-final = WORK / ("animatic-v2-4k.mp4" if FOURK else "animatic-v2.mp4")
-concat(seg_files, final)
+MUSIC = ROOT / "06-music-sfx/organ-underscore-v1.mp3"   # ElevenLabs Music stand-in; organist recording replaces it
+dry = WORK / "animatic-v3-nomusic.mp4"
+concat(seg_files, dry)
+final = WORK / ("animatic-v3-4k.mp4" if FOURK else "animatic-v3.mp4")
+if MUSIC.exists():
+    # music under the whole piece, ducked by the voice, faded out over the last 4 s
+    run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(dry), "-i", str(MUSIC), "-filter_complex",
+         f"[1:a]atrim=0:{t:.3f},asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo,"
+         f"afade=t=in:st=0:d=3,afade=t=out:st={t-4:.3f}:d=4,volume=0.55[m];"
+         f"[0:a]asplit[n][sc];[m][sc]sidechaincompress=threshold=0.03:ratio=5:attack=30:release=700:makeup=1[md];"
+         f"[n][md]amix=inputs=2:duration=first:normalize=0,loudnorm=I=-16:TP=-1.5:LRA=11[a]",
+         "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", str(final)])
+    music_note = f"music: {MUSIC.name} (ducked under voice)"
+else:
+    shutil.copy(dry, final); music_note = "music: none"
 report = [f"{'segment':12s} {'start':>7s} {'length':>7s} {'speech':>7s}  voice"]
 report += [f"{n:12s} {s:7.1f} {d:7.1f} {v:7.1f}  {src}" for n, s, d, v, src in timing]
-report += ["", f"TOTAL {t:.1f} s  (cap 90 s)   output: {final}  {W}x{H} @ {FPS} fps"]
-(WORK / "animatic-v2-timing.txt").write_text("\n".join(report) + "\n")
+report += ["", f"TOTAL {t:.1f} s  (cap 90 s)   output: {final}  {W}x{H} @ {FPS} fps", music_note]
+(WORK / "animatic-v3-timing.txt").write_text("\n".join(report) + "\n")
 print("\n".join(report))
