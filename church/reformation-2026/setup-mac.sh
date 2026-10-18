@@ -15,6 +15,7 @@ cp "$SRC/vo-only.txt" "$DEST/01-script/"
 cp "$SRC/vo-only.txt" "$DEST/02-vo/"
 cp "$SRC/POST-COPY.md" "$DEST/09-post-copy/"
 cp "$SRC/check-master.sh" "$DEST/08-exports/"
+cp "$SRC/make_animatic.py" "$DEST/07-edit/"
 chmod +x "$DEST/08-exports/check-master.sh"
 
 # Grok prompts as a standalone file the Grok agent can read

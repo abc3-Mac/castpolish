@@ -52,7 +52,7 @@ Use one or two, not all. The script uses #1.
 - "Lutheran or not, church-goer or not — come and hear it for yourself."
 - "If you've ever wondered whether you're enough, this weekend is for you."
 - "Bring a neighbor. Bring your questions. The coffee's on at 10:30."
-- "Five hundred years later, the doors are still open. Ours are at [address]."
+- "Five hundred years later, the doors are still open. Ours are at 112 N. Border St, Troy."
 
 ## Extra ideas for the same weekend (optional, for the agents)
 

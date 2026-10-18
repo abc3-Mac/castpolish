@@ -2,6 +2,7 @@
 
 **Church:** Saint Paul's Lutheran Church (LCMS), 112 N. Border St., Troy, Illinois 62294 · saintpaulstroy.org · 618-667-6681
 **Pastor:** Rev. Dr. Albert B. Collver III
+**Online:** facebook.com/stpaultroyil · youtube.com/c/StPaulsTroyIL · instagram.com/saintpaulstroy · logo: saintpaulstroy.org/wp-content/uploads/2021/04/stp-logo-nofooter.jpeg. The Weekly Worship page confirms Sat 5 PM / Sun 9 AM; the About page still shows older times (Sat 6, Sun 8 & 10:30), so double-check the Bible class time.
 **Format:** Vertical 9:16, 4K (2160 x 3840), 24 or 30 fps, stereo 48 kHz
 **Target length:** 85–88 seconds (hard cap 90 s so it posts as a Facebook Reel)
 **Word budget:** ~210 words total (VO + on-camera) at ~150 wpm, leaving room for SFX beats

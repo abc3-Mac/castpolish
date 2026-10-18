@@ -126,7 +126,7 @@ Tips: ask for 2–3 variations of G2 (the strike) — it's the money shot. If Gr
 - Build on a 2160x3840, 30 fps timeline. Drop the VO first, then cut picture to the words. Never stretch the voice to fit a picture.
 - Captions: full-sentence captions for the VO, big and centered in the middle-lower third. The three "callout" captions (date, Romans 1:17, service times) get a larger, slower treatment.
 - Transition from history to today at 0:44: a hard cut from the warm painterly montage to the bright, real sanctuary. That contrast is the point. No dissolve.
-- The end card must be readable in 2 seconds: church name, "Reformation Weekend," Sat 5 PM / Sun 9 AM / Bible class 10:30 AM, street address, website. Hold 8 s minimum.
+- The end card must be readable in 2 seconds: church name, "Reformation Weekend," Sat 5 PM / Sun 9 AM / Bible class 10:30 AM, 112 N. Border St, Troy, IL 62294, saintpaulstroy.org. Hold 8 s minimum.
 - Add the church logo small in a corner for the entire video (inside the safe zone).
 - Export two files: `reformation-2026-master-9x16.mp4` (full quality) and the same file trimmed to 60 s if the 60-s cut is needed for any other platform.
 - Export a 1080x1920 version for the newsletter thumbnail/preview and a 1:1 still of the end card for the Facebook event.

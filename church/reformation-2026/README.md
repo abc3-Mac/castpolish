@@ -16,6 +16,7 @@ Everything needed to produce a 90-second vertical 4K video, "The Storm and the D
 | `HANDOFF.md` | How to run this on the Mac, plus paste-ready prompts for Claude Code, ElevenLabs, Grok, and the editor |
 | `setup-mac.sh` | Builds the project folder on the Mac, gathers Wittenberg photos, checks tools |
 | `check-master.sh` | Verifies the final export: 9:16, 4K, under 90 s, loudness |
+| `make_animatic.py` | Builds a rough timing animatic from the stills with macOS voices (`python3 07-edit/make_animatic.py`, add `--4k` for full size) |
 
 ## Schedule (week of Oct 18, 2026)
 
