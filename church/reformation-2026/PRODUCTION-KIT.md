@@ -20,7 +20,7 @@ Shoot everything **vertical** at 4K 30 fps. Lock exposure/focus by long-pressing
 
 ### On-camera segments (record 3 takes each, as separate clips)
 1. **Pastor segment, 0:44–0:62** (about 18 s). Medium shot, waist up, altar soft behind, windows lighting the face from the side. Eyes to the lens. Speak slower than feels natural. Pause after "Am I enough?"
-2. **Closing line, 0:78+** ("Come and hear why it still matters. We'll save you a seat."). Same spot or standing at the open front door.
+2. **Closing line, 0:78+** ("Come meet the Jesus Luther found. We'll save you a seat."). Same spot or standing at the open front door.
 3. **Safety take of the full invitation** (0:62–0:78) on camera, in case the ElevenLabs voice feels wrong for the local invite. A real pastor inviting real people is often stronger than a narrator.
 
 **Audio for on-camera:** a lav mic or a second phone recording Voice Memos in a shirt pocket, 6–8 inches from the mouth. Turn off the HVAC for the take. Clap once at the start so the editor can sync.
@@ -60,10 +60,10 @@ Same road, the figure in mid-frame, sky splits with a single massive lightning b
 Stone monastery cell, one candle on a wooden desk, a kneeling monk seen from behind, hands clasped around a worn leather Bible, breath visible, slow push-in toward the hands. Very dark, very still.
 
 **Clip G4 — Light on the page (0:19–0:28)**
-Extreme close-up of a hand-printed Latin Bible page turning, warm light growing from the top of the frame until the page glows, dust in the light, slow.
+Extreme close-up of a hand-printed Latin Bible page turning, warm light growing from the top of the frame until the page glows, dust in the light, slow. Then tilt up from the page to a plain wooden cross on the stone wall above the desk, the same warm light catching it. (This lands on "God had already come down — in Jesus.")
 
 **Clip G5 — The door (0:28–0:33)** — image-to-video from YOUR photo
-Use the Wittenberg door photo as the source. Prompt: slow cinematic push-in toward the door, pre-dawn blue light, subtle drifting mist, no other change to the image. (Keep the real photo; do not let Grok redraw the door.)
+Use `05-stills-wittenberg/THESES-DOOR_bronze_2010_IMG_0801.jpg` as the source (portrait, 1936x2592 — upscale ~1.5x for 4K vertical, or do this as a Ken Burns move in the editor instead of Grok). Prompt: slow tilt down from the crucifixion mosaic to the bronze door, then a gentle push-in, pre-dawn blue light, subtle drifting mist, no other change to the image. (Keep the real photo; do not let Grok redraw the door or the mosaic.)
 
 **Clip G6 — The press (0:33–0:36)**
 Wooden Gutenberg-style printing press, lever pulled down hard, a printed sheet lifted, then dozens of sheets fanning outward and filling the frame, rapid cuts feel.
@@ -72,6 +72,7 @@ Wooden Gutenberg-style printing press, lever pulled down hard, a printed sheet l
 a) An open German Bible on a plain wooden table, morning light.
 b) A family of five at a farmhouse kitchen table, a father reading from a small book, children listening (faces soft, from the side).
 c) A congregation singing, seen from behind, hymnals raised, candlelight.
+d) A simple altar cross in a plain church, daylight through a window behind it, slow push-in. (Lands on "and met Jesus in it for themselves.")
 
 **Clip G8 — Transition texture (used under captions)**
 Slow drifting parchment texture with faint handwritten Latin, very subtle, for the Romans 1:17 and date captions.

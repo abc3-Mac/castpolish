@@ -20,7 +20,7 @@ Fill in the bracketed items. Dates assume Reformation Weekend is Sat Oct 24 / Su
 > 📍 [Street address], Troy
 > 🌐 [website]
 >
-> Members, neighbors, and the curious are all welcome. Come and hear why it still matters.
+> Members, neighbors, and the curious are all welcome. Come and meet the Jesus Luther found.
 >
 > #Reformation #MartinLuther #Lutheran #Troy #Church #ReformationDay #LCMS
 

@@ -47,7 +47,8 @@ Use one or two, not all. The script uses #1.
 
 ## Invitation phrasing options (ending)
 
-- "Come and hear why it still matters. We'll save you a seat."  (used in script)
+- "Come meet the Jesus Luther found. We'll save you a seat."  (used in script)
+- "Come and hear why it still matters. We'll save you a seat."  (earlier draft)
 - "Lutheran or not, church-goer or not — come and hear it for yourself."
 - "If you've ever wondered whether you're enough, this weekend is for you."
 - "Bring a neighbor. Bring your questions. The coffee's on at 10:30."
