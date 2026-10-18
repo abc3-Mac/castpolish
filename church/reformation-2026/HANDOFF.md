@@ -24,7 +24,7 @@ If your Wittenberg photos are inside the Photos app rather than loose files, sel
 ## Step 2 — Open Claude Code on the Mac and paste this
 
 ```
-I'm producing a 90-second vertical 4K Reformation video for Saint Paul's Lutheran Church in Troy.
+I'm producing a 90-second vertical 4K Reformation video for Saint Paul's Lutheran Church (LCMS), 112 N. Border St., Troy, Illinois, where I am the pastor (Rev. Dr. Albert Collver).
 The full package is in ~/Movies/Reformation-2026/ (also in this repo under church/reformation-2026/).
 Read 01-script/SCRIPT.md and 01-script/PRODUCTION-KIT.md first.
 
@@ -41,7 +41,7 @@ Act as the production coordinator. Do these in order and report after each:
    checklist in 07-edit/EDIT-PLAN.md that maps each timecode in SCRIPT.md to a specific file.
 5. When I export 08-exports/reformation-2026-master-9x16.mp4, run
    church/reformation-2026/check-master.sh on it and tell me what to fix.
-6. Fill in POST-COPY.md with the final address, website, Bible class topic, and links I give you,
+6. Fill in POST-COPY.md with the Bible class topic and the YouTube/Facebook links I give you,
    and save the finished versions to 09-post-copy/.
 Do not change the script wording without asking; the pastor approved it.
 ```

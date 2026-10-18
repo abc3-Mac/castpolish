@@ -33,9 +33,10 @@ Shoot everything **vertical** at 4K 30 fps. Lock exposure/focus by long-pressing
 8. Baptismal font, cross, any stained glass with Luther's rose or a Reformation theme.
 9. Front doors opening from the inside, light pouring in (the "door" rhyme with Wittenberg).
 
-### Around Troy
-10. Church exterior: steeple from the street, sign with the church name, main entrance.
-11. Two or three "this is our town" shots: main street, a river or bridge, a landmark, fall leaves. Early morning or late afternoon light.
+### Around Troy, Illinois
+10. Church exterior on N. Border St.: steeple from the street, the church sign, the main entrance, and the St. Paul's Lutheran School sign next door (a 2-second school shot reads "families welcome").
+11. Two or three "this is our town" shots: downtown Troy (Main/Market Street storefronts), the water tower, Tri-Township Park, a harvested cornfield or fall trees on the edge of town, the I-55/I-70 overpass at dusk if you want a "Metro East" feel. Early morning or late afternoon light.
+11b. Optional: a slow drive-by of the church from a passenger seat (phone braced on the window frame), 10 s, for the invitation section.
 12. Basement classroom: coffee pouring, chairs set in a circle, a Bible and a notepad on the table, a welcome sign.
 13. People, if available and willing: a greeter at the door, two people talking over coffee, a family in a pew. Smiles, no staged waving.
 

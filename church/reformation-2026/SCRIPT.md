@@ -1,6 +1,7 @@
 # "The Storm and the Door" — Reformation 2026 Video Script
 
-**Church:** Saint Paul's Lutheran Church, Troy
+**Church:** Saint Paul's Lutheran Church (LCMS), 112 N. Border St., Troy, Illinois 62294 · saintpaulstroy.org · 618-667-6681
+**Pastor:** Rev. Dr. Albert B. Collver III
 **Format:** Vertical 9:16, 4K (2160 x 3840), 24 or 30 fps, stereo 48 kHz
 **Target length:** 85–88 seconds (hard cap 90 s so it posts as a Facebook Reel)
 **Word budget:** ~210 words total (VO + on-camera) at ~150 wpm, leaving room for SFX beats
@@ -28,11 +29,11 @@ Legend: **VO** = ElevenLabs narration · **PASTOR** = on-camera, recorded in the
 | | | **VO:** "October 31, 1517. He nails ninety-five theses to a church door in Wittenberg. The printing press does the rest." |
 | 0:36–0:44 | Fast montage (1 s each): a German Bible, a hymnal open to "A Mighty Fortress", a family at a kitchen table, a child reading a catechism, an altar cross in daylight, YOUR Wittenberg town photos. | *MUSIC: tempo lifts, hopeful.* |
 | | | **VO:** "Soon ordinary people had a Bible in their own language — and met Jesus in it for themselves." |
-| 0:44–0:62 | **PASTOR ON CAMERA.** Sanctuary, altar soft-focused behind, daylight from windows. Medium shot, eyes to lens. Small caption lower third: **[Pastor Name] · Saint Paul's Lutheran, Troy** | *MUSIC: ducks to barely audible under speech.* |
+| 0:44–0:62 | **PASTOR ON CAMERA.** Sanctuary, altar soft-focused behind, daylight from windows. Medium shot, eyes to lens. Small caption lower third: **Pastor Albert Collver · Saint Paul's Lutheran, Troy, IL** | *MUSIC: ducks to barely audible under speech.* |
 | | | **PASTOR:** "Five hundred years later, the question hasn't changed: *Am I enough?* The honest answer is no — and that's the good news, because Jesus is. It was never about Luther. It's about Christ, for you. You are forgiven. You are free to love your neighbor." |
 | 0:62–0:78 | Church exterior in Troy: steeple, sign, front doors opening, candles being lit, a hymnal handed to someone, coffee in the basement classroom, a few friendly faces. Caption builds line by line: **Saturday 5 PM · Sunday 9 AM · Bible Class 10:30 AM** | *SFX: church bell, one or two strikes. MUSIC: "A Mighty Fortress" melody enters clearly.* |
 | | | **VO:** "Celebrate the Reformation at Saint Paul's Lutheran Church in Troy: Saturday at 5 PM or Sunday at 9 AM, Bible class at 10:30 in the church basement. Members, neighbors, the curious — all are welcome." |
-| 0:78–0:88 | END CARD (hold 8–10 s): church logo/name, **Reformation Weekend**, times, street address, website or QR code. Optional: pastor on camera for the last line, then cut to card. | *MUSIC: "A Mighty Fortress" organ swell, final chord rings out and fades.* |
+| 0:78–0:88 | END CARD (hold 8–10 s): church logo/name, **Reformation Weekend**, times, **112 N. Border St., Troy, IL**, **saintpaulstroy.org** or a QR code. Optional: pastor on camera for the last line, then cut to card. | *MUSIC: "A Mighty Fortress" organ swell, final chord rings out and fades.* |
 | | | **PASTOR (on camera or VO):** "Come meet the Jesus Luther found. We'll save you a seat." |
 
 ---

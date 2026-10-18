@@ -42,7 +42,7 @@ Use one or two, not all. The script uses #1.
 3. **The Bible in your own hands.** Luther wanted a plowboy to read Scripture. Today it's on your phone. Do you?
 4. **Singing your faith.** Congregational hymns were a Reformation gift. "A Mighty Fortress" is still sung in every language.
 5. **Ordinary work is holy.** Vocation: the farmer, the nurse, the mom, the mechanic serve God by serving their neighbor. No need to become a monk.
-6. **Grace that goes outward.** Freed people are free to serve. Point to a food pantry, a youth group, or something concrete St. Paul's does in Troy.
+6. **Grace that goes outward.** Freed people are free to serve. Point to something concrete St. Paul's does in Troy: the Lutheran school on the same campus, a food pantry, a youth group, a shut-in visit.
 7. **Not a new church, a return.** The Reformation was not about leaving; it was about getting back to Christ at the center.
 
 ## Invitation phrasing options (ending)

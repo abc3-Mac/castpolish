@@ -1,6 +1,6 @@
 # Post Copy — YouTube, Facebook, Newsletter
 
-Fill in the bracketed items. Dates assume Reformation Weekend is Sat Oct 24 / Sun Oct 25, 2026.
+Church facts used below: Saint Paul's Lutheran Church (LCMS), 112 N. Border St., Troy, IL 62294 · 618-667-6681 · saintpaulstroy.org · Pastor: Rev. Dr. Albert B. Collver III. Remaining brackets: Bible class topic, video links, Facebook page handle. Dates assume Reformation Weekend is Sat Oct 24 / Sun Oct 25, 2026.
 
 ## YouTube (upload as a vertical video; under 3 minutes it is automatically a Short)
 
@@ -17,12 +17,12 @@ Fill in the bracketed items. Dates assume Reformation Weekend is Sat Oct 24 / Su
 > 🕘 Sunday, October 25 — 9:00 AM
 > ☕ Bible class Sunday at 10:30 AM in the church basement
 >
-> 📍 [Street address], Troy
-> 🌐 [website]
+> 📍 112 N. Border St., Troy, IL 62294
+> 🌐 saintpaulstroy.org · 618-667-6681
 >
 > Members, neighbors, and the curious are all welcome. Come and meet the Jesus Luther found.
 >
-> #Reformation #MartinLuther #Lutheran #Troy #Church #ReformationDay #LCMS
+> #Reformation #MartinLuther #Lutheran #TroyIL #MetroEast #Church #ReformationDay #LCMS
 
 **Settings:** Not made for kids. Add chapters only if over 60 s is split awkwardly (it isn't). Upload the SRT caption file. Thumbnail: the lightning frame with the caption "Am I enough?" or the end card.
 
@@ -37,7 +37,7 @@ Fill in the bracketed items. Dates assume Reformation Weekend is Sat Oct 24 / Su
 > Sat 10/24 · 5 PM
 > Sun 10/25 · 9 AM, Bible class 10:30 AM (basement, coffee's on)
 >
-> Everyone's welcome. Bring a neighbor. 📍 [address]
+> Everyone's welcome. Bring a neighbor. 📍 112 N. Border St., Troy, IL · saintpaulstroy.org
 
 **Also post:** a Facebook Event for Reformation Weekend with the 1:1 end-card image, and share the Reel into it. Pin the post Thursday through Sunday morning.
 
@@ -65,10 +65,10 @@ Fill in the bracketed items. Dates assume Reformation Weekend is Sat Oct 24 / Su
 >
 > Please share the video with a friend or neighbor who's never been inside our doors. Five hundred years later, they're still open.
 >
-> [Pastor's name]
+> Pastor Collver
 
 **Plain text link line for the end of the newsletter:**
 > Watch and share: [YouTube link] · Also on Facebook: [Facebook link]
 
 ## Alt text / accessibility
-"A 90-second vertical video about Martin Luther and the Reformation, ending with an invitation to Reformation services at Saint Paul's Lutheran Church in Troy, Saturday at 5 PM and Sunday at 9 AM with Bible class at 10:30 AM."
+"A 90-second vertical video about Martin Luther and the Reformation, ending with an invitation to Reformation services at Saint Paul's Lutheran Church in Troy, Illinois, Saturday at 5 PM and Sunday at 9 AM with Bible class at 10:30 AM."
