@@ -46,6 +46,8 @@ Shoot everything **vertical** at 4K 30 fps. Lock exposure/focus by long-pressing
 
 ## 3. Grok compositing briefs
 
+**How these get made on the Mac:** the Grok CLI (`~/.grok/bin/grok`, signed in) has Imagine tools built in. `python3 03-grok-clips/generate_stills.py` generates every still below (720x1280 each; the tool has no size option) into `03-grok-clips/<clip>/`. For motion, `reference_to_video` makes 1–15 s clips at 720p/24 fps with its own sound, pinned to a first and last frame — used for G2 (strike) and G6 (press). Everything Grok makes is upscaled 3x to 2160x3840 in the edit with light grain; the painterly style hides the upscale. Your own photos are native 4K and need no upscale.
+
 Give Grok (Imagine / video) one clip at a time. Every prompt starts with the same header so the clips match.
 
 **Header for every prompt:**
@@ -81,6 +83,8 @@ Slow drifting parchment texture with faint handwritten Latin, very subtle, for t
 Tips: ask for 2–3 variations of G2 (the strike) — it's the money shot. If Grok produces a visible face, regenerate; a modern-looking face on "Luther" reads as AI instantly. Lightning and rain can also be layered as overlays in the editor if Grok's weather looks off.
 
 ## 4. ElevenLabs voice-over
+
+**On the Mac:** `python3 02-vo/render_vo.py` renders every narration segment in the pastor's own ElevenLabs voice clone (the podcast voice, `~/.elevenlabs.env`), one file per segment plus a -16 LUFS master, and runs the text through the shared `voice_processor` (so Wittenberg is read the German way). The two on-camera lines are rendered too, as stand-ins for the animatic only. First render (18 Oct 2026): 74 s of narration + 25 s of pastor lines — about 25 s over the cap at the clone's natural pace, so the trim guide in SCRIPT.md applies or the read must be quicker.
 
 **Voice:** a warm, low, documentary narrator. Try a few of the stock "narration" voices and pick one that sounds like a person telling a story at a table, not a movie trailer. Avoid anything breathy or overly theatrical.
 
