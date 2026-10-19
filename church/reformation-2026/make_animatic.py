@@ -7,7 +7,7 @@ Music: 06-music-sfx/organ-underscore-v1.mp3 (ElevenLabs Music stand-in) ducked u
 
 Usage:  python3 make_animatic.py            # 1080x1920 draft
         python3 make_animatic.py --4k       # 2160x3840
-Output: 07-edit/animatic/animatic-v6.mp4 and animatic-v6-timing.txt
+Output: 07-edit/animatic/animatic-v7.mp4 and animatic-v7-timing.txt
 """
 import subprocess, sys, pathlib, textwrap, shutil
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -55,7 +55,7 @@ S = [
    ("grok:G7d-altar-cross/G7d-altar-cross-v1.jpg", "", "", 0.0, "in"),
    ("google-album-wittenberg-2010/029_IMG_0853.jpg", "", "", 0.05, "out")], 0.3),
  ("07-pastor", PASTOR_VOICE, "Five hundred years later, the question is the same: Am I enough? The honest answer is no — but Jesus is. You are forgiven, and you are free to love your neighbor.",
-  [("google-album-wittenberg-2010/012_IMG_0804.jpg", "Pastor Albert Collver · Saint Paul's Lutheran, Troy, IL", "PASTOR ON CAMERA — record in the sanctuary, altar behind, eyes to lens (voice is a clone stand-in)", 0.5, "none")], 0.35),
+  [("/Users/abc3/Movies/Reformation-2026/04-broll/pastor-on-camera/pastor-take2.mp4", "Pastor Albert Collver · Saint Paul's Lutheran, Troy, IL", "", 0, "live")], 0),
  ("08-invite", VO_VOICE, "Join us at Saint Paul's Lutheran in Troy — Saturday at 5, Sunday at 9, Bible class at 10:30. Everyone is welcome.",
   [("/Users/abc3/Movies/Reformation-2026/04-broll/troy-church/IMG_4628.HEIC#center=0.27,0.45", "Saturday 5 PM\nSunday 9 AM\nBible Class 10:30 AM", "", 0.45, "in")], 0.3),
  ("09-end", PASTOR_VOICE, "Come meet the Jesus Luther found. We'll save you a seat.",
@@ -141,11 +141,26 @@ def shot_clip(frame_png, seconds, zoom, out):
     run(["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-framerate", str(FPS), "-i", str(frame_png),
          "-vf", vf, "-frames:v", str(frames), *ENC, str(out)])
 
-def video_clip(src, seconds, out):
-    """A generated clip (e.g. 720p Grok video): upscale with light grain, hold the last frame to fill."""
-    vf = (f"scale={W}:{H}:flags=lanczos,unsharp=5:5:0.3,noise=alls=5:allf=t,"
-          f"tpad=stop_mode=clone:stop_duration=60,fps={FPS}")
-    run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-vf", vf, "-an", "-t", f"{seconds:.3f}", *ENC, str(out)])
+def video_clip(src, seconds, out, caption=None, keep_audio=False, grain=True):
+    """A clip: Grok 720p video (upscaled with grain) or real footage (scaled to fit). Optional lower-third caption 1–6 s."""
+    vf = f"scale={W}:{H}:flags=lanczos" + (",unsharp=5:5:0.3,noise=alls=5:allf=t" if grain else "") + f",tpad=stop_mode=clone:stop_duration=60,fps={FPS}"
+    cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(src)]
+    if caption:
+        png = out.with_suffix(".lower3.png")
+        im = Image.new("RGBA", (RW, RH), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+        f = font(F_SERIF, int(RW * 0.040)); fs = font(F_SERIF, int(RW * 0.030))
+        name, _, rest = caption.partition(" · ")
+        d.rectangle((0, RH * 0.80, RW, RH * 0.80 + f.size * 3.2), fill=(0, 0, 0, 120))
+        draw_center(d, name, f, RH * 0.80 + f.size * 0.4, (245, 238, 220)); draw_center(d, rest, fs, RH * 0.80 + f.size * 1.9, (230, 220, 200))
+        im.save(png)
+        cmd += ["-i", str(png), "-filter_complex", f"[0:v]{vf}[v0];[1:v]scale={W}:{H}[c];[v0][c]overlay=0:0:enable='between(t,1,6)'[v]", "-map", "[v]"]
+        if keep_audio: cmd += ["-map", "0:a"]
+    else:
+        cmd += ["-vf", vf]
+        if not keep_audio: cmd += ["-an"]
+    cmd += ["-t", f"{seconds:.3f}", *ENC]
+    if keep_audio: cmd += ["-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2"]
+    run(cmd + [str(out)])
 
 def concat(files, out):
     lst = out.with_suffix(".txt")
@@ -157,20 +172,27 @@ timing, seg_files, t = [], [], 0.0
 for name, voice, line, shots, pad in S:
     seg = WORK / name; seg.mkdir(exist_ok=True)
     real = VO / f"{name}.mp3"
-    if real.exists():
+    live = [sh for sh in shots if sh[4] == "live"]
+    if live:
+        src = still(live[0][0]); audio = seg / "live.wav"; source = "on camera"
+        run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-vn", "-ac", "2", "-ar", "48000",
+             "-af", "loudnorm=I=-16:TP=-1.5:LRA=11", str(audio)])
+    elif real.exists():
         audio = real; source = "ElevenLabs"
     else:
         audio = seg / "vo.aiff"; source = f"say/{voice}"
         run(["say", "-v", voice, "-r", "178", "-o", str(audio), line])
     vo = dur(audio)
-    lead = 1.2 if name == "01-open" else 0.3
-    total = lead + vo + pad
+    lead = 0.0 if live else 1.2 if name == "01-open" else 0.3
+    total = vo if live else lead + vo + pad
     share = total / len(shots)
     clips = []
     for i, (img, cap, slate, dark, zoom) in enumerate(shots):
         mp4 = seg / f"shot{i}.mp4"
         if zoom == "clip":
             video_clip(still(img), share, mp4)
+        elif zoom == "live":
+            video_clip(still(img), share, mp4, caption=cap, keep_audio=False, grain=False)
         else:
             png = seg / f"shot{i}.png"
             render_frame(img, cap, slate, dark).save(png)
@@ -190,9 +212,9 @@ for name, voice, line, shots, pad in S:
 MUSIC = ROOT / "06-music-sfx/organ-mighty-fortress-v2.mp3"   # FluidSynth + GeneralUser GS; organist recording replaces it
 if not MUSIC.exists(): MUSIC = ROOT / "06-music-sfx/organ-mighty-fortress-v1.mp3"
 if not MUSIC.exists(): MUSIC = ROOT / "06-music-sfx/organ-underscore-v1.mp3"
-dry = WORK / "animatic-v6-nomusic.mp4"
+dry = WORK / "animatic-v7-nomusic.mp4"
 concat(seg_files, dry)
-final = WORK / ("animatic-v6-4k.mp4" if FOURK else "animatic-v6.mp4")
+final = WORK / ("animatic-v7-4k.mp4" if FOURK else "animatic-v7.mp4")
 if MUSIC.exists():
     # music under the whole piece, ducked by the voice, faded out over the last 4 s
     run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(dry), "-i", str(MUSIC), "-filter_complex",
@@ -207,5 +229,5 @@ else:
 report = [f"{'segment':12s} {'start':>7s} {'length':>7s} {'speech':>7s}  voice"]
 report += [f"{n:12s} {s:7.1f} {d:7.1f} {v:7.1f}  {src}" for n, s, d, v, src in timing]
 report += ["", f"TOTAL {t:.1f} s  (cap 90 s)   output: {final}  {W}x{H} @ {FPS} fps", music_note]
-(WORK / "animatic-v6-timing.txt").write_text("\n".join(report) + "\n")
+(WORK / "animatic-v7-timing.txt").write_text("\n".join(report) + "\n")
 print("\n".join(report))

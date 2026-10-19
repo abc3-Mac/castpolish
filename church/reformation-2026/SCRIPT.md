@@ -31,7 +31,7 @@ Legend: **VO** = ElevenLabs narration · **PASTOR** = on-camera, recorded in the
 | 0:36–0:44 | Fast montage (1 s each): a German Bible, a hymnal open to "A Mighty Fortress", a family at a kitchen table, a child reading a catechism, an altar cross in daylight, YOUR Wittenberg town photos. | *MUSIC: tempo lifts, hopeful.* |
 | | | **VO:** "Soon ordinary people had a Bible in their own language — and met Jesus in it for themselves." |
 | 0:44–0:62 | **PASTOR ON CAMERA.** Sanctuary, altar soft-focused behind, daylight from windows. Medium shot, eyes to lens. Small caption lower third: **Pastor Albert Collver · Saint Paul's Lutheran, Troy, IL** | *MUSIC: ducks to barely audible under speech.* |
-| | | **PASTOR:** "Five hundred years later, the question is the same: *Am I enough?* The honest answer is no — but Jesus is. You are forgiven, and you are free to love your neighbor." |
+| | | **PASTOR (as recorded 19 Oct 2026, take 2):** "Five hundred years later, the question is the same: *Am I enough?* The answer is no — but Jesus is. Because Jesus died for our sins, he has forgiven you and me. And now we are set free: free to forgive one another, and free to serve our neighbor." |
 | 0:62–0:78 | Church exterior in Troy (the bell-tower photo in `04-broll/troy-church/`, then live B-roll when shot): steeple, sign, front doors opening, candles being lit, a hymnal handed to someone, coffee in the basement classroom, a few friendly faces. Caption builds line by line: **Saturday 5 PM · Sunday 9 AM · Bible Class 10:30 AM** | *SFX: church bell, one or two strikes. MUSIC: "A Mighty Fortress" melody enters clearly.* |
 | | | **VO:** "Join us at Saint Paul's Lutheran in Troy — Saturday at 5, Sunday at 9, Bible class at 10:30. Everyone is welcome." |
 | 0:78–0:88 | END CARD over the sanctuary photo, darkened (hold 8–10 s): church logo/name, **Reformation Weekend**, times, **112 N. Border St., Troy, IL**, **saintpaulstroy.org** or a QR code. Optional: pastor on camera for the last line, then cut to card. | *MUSIC: "A Mighty Fortress" organ swell, final chord rings out and fades.* |
@@ -53,7 +53,7 @@ Legend: **VO** = ElevenLabs narration · **PASTOR** = on-camera, recorded in the
 >
 > Soon ordinary people had a Bible in their own language — and met Jesus in it for themselves.
 >
-> **[PASTOR]** Five hundred years later, the question is the same: Am I enough? The honest answer is no — but Jesus is. You are forgiven, and you are free to love your neighbor.
+> **[PASTOR]** Five hundred years later, the question is the same: Am I enough? The answer is no — but Jesus is. Because Jesus died for our sins, he has forgiven you and me. And now we are set free: free to forgive one another, and free to serve our neighbor.
 >
 > Join us at Saint Paul's Lutheran in Troy — Saturday at 5, Sunday at 9, Bible class at 10:30. Everyone is welcome.
 >
@@ -84,4 +84,5 @@ Measured 18 Oct with the pastor's ElevenLabs clone at natural pace: the full 210
 - "God had already come down — in Jesus" is the script's plain-language gloss on Romans 1:17 read through Romans 3:21–26 and Philippians 2:6–8. It is not a quotation of Luther.
 - The cell segment opens on the **Lutherhaus** (the pastor's photo): the Augustinian "Black Cloister" in Wittenberg where Luther lived as a monk from 1511 and, after 1525, with Katharina and the children. Luther's 1505–1511 monastery years were in Erfurt, so the caption calls it "the Augustinian monastery, Wittenberg" rather than the place of his vow.
 - The opening photo is the **Lutherstein in the Dübener Heide** (granite boulder on the B2 between Bad Düben and Kemberg, the pastor's own photo). Tradition places Luther resting there in 1508 on the road from Erfurt to Wittenberg and preaching from it in 1519 after the Leipzig Disputation; it is inscribed "Eine feste Burg ist Gott" (added 1817). It is **not** the 1505 lightning site — that was Stotternheim, near Erfurt — so the caption says "on Luther's road from Erfurt" and the thunderstorm stays on the painted road.
+- The pastor's segment was recorded 19 Oct 2026 (`04-broll/pastor-on-camera/IMG_0192-raw.mov`, take 2 at 38–57 s, cut to `pastor-take2.mp4`). He spoke it in his own words, about 19 s rather than the scripted 12; the script above now reads as recorded.
 - The pastor segment and the invitation are the only parts that must be re-recorded if the times change. Keep those as separate takes.
