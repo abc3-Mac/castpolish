@@ -130,7 +130,7 @@ def render_frame(image_rel, caption, slate, darken):
         draw_center(d, wrapped, f, RH * 0.08 + RW * 0.02, (255, 230, 200), shadow=False, line_gap=1.3)
     return im
 
-ENC = ["-c:v", "libx264", "-preset", "fast", "-crf", "20", "-pix_fmt", "yuv420p"]
+ENC = ["-c:v", "libx264", "-preset", "fast", "-crf", "20", "-pix_fmt", "yuv420p", "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"]
 
 def shot_clip(frame_png, seconds, zoom, out):
     frames = max(1, int(round(seconds * FPS)))
@@ -246,7 +246,11 @@ if MUSIC.exists():
          f"afade=t=in:st=0:d=3,afade=t=out:st={t-4:.3f}:d=4,volume=0.55[m];"
          f"[0:a]asplit[n][sc];[m][sc]sidechaincompress=threshold=0.03:ratio=5:attack=30:release=700:makeup=1[md];"
          f"[n][md]amix=inputs=2:duration=first:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[a]",
-         "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", str(final)])
+         # re-encode the joined video once so the stream has one set of parameters end to end
+         # (a stitched stream changes SPS at the on-camera cut, which breaks hardware decoders such as PeerTube's)
+         "-map", "0:v", "-map", "[a]", "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
+         "-profile:v", "high", "-level", "5.1", "-g", "60", "-bf", "2", "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
+         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", str(final)])
     music_note = f"music: {MUSIC.name} (ducked under voice)"
 else:
     shutil.copy(dry, final); music_note = "music: none"

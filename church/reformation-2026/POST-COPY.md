@@ -4,27 +4,31 @@ Church facts used below: Saint Paul's Lutheran Church (LCMS), 112 N. Border St.,
 
 ## YouTube (upload as a vertical video; under 3 minutes it is automatically a Short)
 
-**Title (pick one, under 70 characters):**
-- Why the Reformation Still Matters | Reformation Weekend at St. Paul's, Troy
-- One Lightning Bolt. 500 Years. | St. Paul's Lutheran, Troy
-- Am I Enough? A 500-Year-Old Answer
+**Title (under 70 characters):**
+Is God For or Against Me? | Reformation Weekend at St. Paul's, Troy
 
-**Description:**
-> In 1505 a terrified law student was thrown to the ground by lightning and promised God he'd become a monk. What Martin Luther found afterward changed the world — and it still answers the question most of us carry quietly: *Am I enough?*
+**Description (final, 19 Oct 2026):**
+> Is God for or against me? In 1505 a terrified law student named Martin Luther was thrown to the ground by lightning on a road near Erfurt and promised to become a monk. He kept the vow — and was still terrified. Then he found the answer in Romans: "The righteous shall live by faith." Not earned. Not bought. Given, in Jesus.
 >
-> Join us for Reformation Weekend at Saint Paul's Lutheran Church in Troy:
+> Five hundred years later the question hasn't changed, and neither has the answer. Join us for Reformation Weekend at Saint Paul's Lutheran Church in Troy, Illinois:
+>
 > 🕔 Saturday, October 24 — 5:00 PM
 > 🕘 Sunday, October 25 — 9:00 AM
 > ☕ Bible class Sunday at 10:30 AM in the church basement
 >
 > 📍 112 N. Border St., Troy, IL 62294
-> 🌐 saintpaulstroy.org · 618-667-6681
+> 🌐 saintpaulstroy.org
+> 📘 facebook.com/stpaultroyil
+> ☎ 618-667-6681
 >
-> Members, neighbors, and the curious are all welcome. Come and meet the Jesus Luther found.
+> Members, neighbors, and the curious are all welcome. Come meet the Jesus that Luther found. We'll save you a seat.
 >
-> #Reformation #MartinLuther #Lutheran #TroyIL #MetroEast #Church #ReformationDay #LCMS
+> —
+> Filmed in Wittenberg, Erfurt and the Dübener Heide by Pastor Albert Collver: the Lutherstein, the Augustinian monastery in Erfurt where Luther became a monk, Luther's study and the Lutherhaus in Wittenberg, the Castle Church's Theses Door, the Stadtkirche where Luther preached, and Cranach's portrait of Luther. No AI-generated imagery. Music: "A Mighty Fortress Is Our God" (Ein feste Burg), Martin Luther, 1529.
+>
+> #Reformation #MartinLuther #Lutheran #LCMS #ReformationDay #TroyIL #MetroEast #Church #AMightyFortress #Wittenberg
 
-**Settings:** Not made for kids. Add chapters only if over 60 s is split awkwardly (it isn't). Upload the SRT caption file. Thumbnail: the lightning frame with the caption "Am I enough?" or the end card.
+**Settings:** Not made for kids. No chapters. Upload the SRT caption file. Thumbnail: the opening frame (the Lutherstein under "Is God for or against me?") or the end card.
 
 ## Facebook Reel / page post
 
