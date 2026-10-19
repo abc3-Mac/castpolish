@@ -7,7 +7,7 @@ Music: 06-music-sfx/organ-underscore-v1.mp3 (ElevenLabs Music stand-in) ducked u
 
 Usage:  python3 make_animatic.py            # 1080x1920 draft
         python3 make_animatic.py --4k       # 2160x3840
-Output: 07-edit/animatic/animatic-v5.mp4 and animatic-v5-timing.txt
+Output: 07-edit/animatic/animatic-v6.mp4 and animatic-v6-timing.txt
 """
 import subprocess, sys, pathlib, textwrap, shutil
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -40,7 +40,8 @@ S = [
  ("02-strike", VO_VOICE, "Lightning strikes so close it throws him to the ground. Martin Luther cries out: \"Saint Anne, help me! I will become a monk!\"",
   [("grok:G2-strike/G2-strike-v2.mp4", "", "", 0, "clip")], 0.35),
  ("03-cell", VO_VOICE, "He kept that vow. Prayed, fasted, confessed for hours — and was still terrified. How could a sinner stand before a holy God?",
-  [("grok:G3-cell/G3-cell-v1.jpg", "", "", 0.1, "in")], 0.35),
+  [("LUTHERHAUS_Wittenberg_Augustinian-monastery.jpg#center=0.5,0.45", "§The Augustinian monastery, Wittenberg — later Luther's home", "", 0.3, "in"),
+   ("grok:G3-cell/G3-cell-v1.jpg", "", "", 0.1, "in")], 0.35),
  ("04-romans", VO_VOICE, "Then he found it in Romans: \"The righteous shall live by faith.\" He'd been climbing toward God. God had already come down — in Jesus. Not earned. Not bought. Given.",
   [("grok:G4-page/G4-page-v2.jpg", "“The righteous shall live by faith.”\n— Romans 1:17", "", 0.05, "in"),
    ("grok:G4b-cross/G4b-cross-v2.jpg", "", "", 0.0, "in")], 0.35),
@@ -113,13 +114,13 @@ def render_frame(image_rel, caption, slate, darken):
         title = caption.startswith("Is God")
         f = font(F_SERIF, int(RW * (0.052 if big else 0.078 if title else 0.062)))
         fs = font(F_SERIF, int(f.size * 0.5))
-        lines = [textwrap.fill(l, 28) if (l and not l.startswith("§")) else l for l in caption.split("\n")]
+        lines = [textwrap.fill(l, 28) if (l and not l.startswith("§")) else ("§" + textwrap.fill(l[1:], 40) if l else l) for l in caption.split("\n")]
         n = sum(1 for l in lines if not l.startswith("§")) + sum(0.6 for l in lines if l.startswith("§"))
         y = RH * 0.42 - n * f.size * 1.25 / 2 if (image_rel is None or big or title) else RH * 0.70
         if all(l.startswith("§") or not l for l in lines): y = RH * 0.80
         for l in lines:
             if l.startswith("§"):
-                draw_center(d, l[1:], fs, y, (230, 220, 200)); y += fs.size * 1.4
+                draw_center(d, l[1:], fs, y, (230, 220, 200)); y += fs.size * 1.4 * (l.count("\n") + 1)
             else:
                 draw_center(d, l, f, y, (245, 238, 220)); y += f.size * 1.25 * (l.count("\n") + 1)
     if slate:
@@ -189,9 +190,9 @@ for name, voice, line, shots, pad in S:
 MUSIC = ROOT / "06-music-sfx/organ-mighty-fortress-v2.mp3"   # FluidSynth + GeneralUser GS; organist recording replaces it
 if not MUSIC.exists(): MUSIC = ROOT / "06-music-sfx/organ-mighty-fortress-v1.mp3"
 if not MUSIC.exists(): MUSIC = ROOT / "06-music-sfx/organ-underscore-v1.mp3"
-dry = WORK / "animatic-v5-nomusic.mp4"
+dry = WORK / "animatic-v6-nomusic.mp4"
 concat(seg_files, dry)
-final = WORK / ("animatic-v5-4k.mp4" if FOURK else "animatic-v5.mp4")
+final = WORK / ("animatic-v6-4k.mp4" if FOURK else "animatic-v6.mp4")
 if MUSIC.exists():
     # music under the whole piece, ducked by the voice, faded out over the last 4 s
     run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(dry), "-i", str(MUSIC), "-filter_complex",
@@ -206,5 +207,5 @@ else:
 report = [f"{'segment':12s} {'start':>7s} {'length':>7s} {'speech':>7s}  voice"]
 report += [f"{n:12s} {s:7.1f} {d:7.1f} {v:7.1f}  {src}" for n, s, d, v, src in timing]
 report += ["", f"TOTAL {t:.1f} s  (cap 90 s)   output: {final}  {W}x{H} @ {FPS} fps", music_note]
-(WORK / "animatic-v5-timing.txt").write_text("\n".join(report) + "\n")
+(WORK / "animatic-v6-timing.txt").write_text("\n".join(report) + "\n")
 print("\n".join(report))
