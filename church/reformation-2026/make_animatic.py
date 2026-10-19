@@ -7,7 +7,7 @@ Music: 06-music-sfx/organ-underscore-v1.mp3 (ElevenLabs Music stand-in) ducked u
 
 Usage:  python3 make_animatic.py            # 1080x1920 draft
         python3 make_animatic.py --4k       # 2160x3840
-Output: 07-edit/animatic/animatic-v7.mp4 and animatic-v7-timing.txt
+Output: 07-edit/animatic/animatic-v8.mp4 and animatic-v8-timing.txt
 """
 import subprocess, sys, pathlib, textwrap, shutil
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -46,20 +46,19 @@ S = [
   [("grok:G4-page/G4-page-v2.jpg", "“The righteous shall live by faith.”\n— Romans 1:17", "", 0.05, "in"),
    ("grok:G4b-cross/G4b-cross-v2.jpg", "", "", 0.0, "in")], 0.35),
  ("05-door", VO_VOICE, "October 31, 1517. He nails ninety-five theses to a church door in Wittenberg. The printing press does the rest.",
-  [("THESES-DOOR_bronze_2010_IMG_0801.jpg", "October 31, 1517", "", 0.05, "in"),
-   ("grok:G6-press/G6-press-v1.jpg", "", "", 0.0, "out")], 0.3),
- ("06-montage", VO_VOICE, "Soon ordinary people had a Bible in their own language — and met Jesus in it for themselves.",
-  [("grok:G7a-bible/G7a-bible-v1.jpg", "", "", 0.0, "in"),
-   ("grok:G7b-family/G7b-family-v1.jpg", "", "", 0.0, "out"),
-   ("grok:G7c-singing/G7c-singing-v1.jpg", "", "", 0.0, "in"),
-   ("grok:G7d-altar-cross/G7d-altar-cross-v1.jpg", "", "", 0.0, "in"),
-   ("google-album-wittenberg-2010/029_IMG_0853.jpg", "", "", 0.05, "out")], 0.3),
+  [("THESES-DOOR_bronze_2010_IMG_0801.jpg", "October 31, 1517", "", 0.05, "in", 4.0),
+   ("grok:G6-press/G6-press-v1.jpg", "", "", 0.0, "out", 2.5),
+   ("grok:G7a-bible/G7a-bible-v1.jpg", "", "", 0.0, "in", 1.0),
+   ("grok:G7b-family/G7b-family-v1.jpg", "", "", 0.0, "out", 1.0),
+   ("grok:G7c-singing/G7c-singing-v1.jpg", "", "", 0.0, "in", 1.0),
+   ("grok:G7d-altar-cross/G7d-altar-cross-v1.jpg", "", "", 0.0, "in", 1.0)], 0.3),
  ("07-pastor", PASTOR_VOICE, "Five hundred years later, the question is the same: Am I enough? The honest answer is no — but Jesus is. You are forgiven, and you are free to love your neighbor.",
   [("/Users/abc3/Movies/Reformation-2026/04-broll/pastor-on-camera/pastor-take2.mp4", "Pastor Albert Collver · Saint Paul's Lutheran, Troy, IL", "", 0, "live")], 0),
  ("08-invite", VO_VOICE, "Join us at Saint Paul's Lutheran in Troy — Saturday at 5, Sunday at 9, Bible class at 10:30. Everyone is welcome.",
   [("/Users/abc3/Movies/Reformation-2026/04-broll/troy-church/IMG_4628.HEIC#center=0.27,0.45", "Saturday 5 PM\nSunday 9 AM\nBible Class 10:30 AM", "", 0.45, "in")], 0.3),
  ("09-end", PASTOR_VOICE, "Come meet the Jesus Luther found. We'll save you a seat.",
-  [("/Users/abc3/Movies/Reformation-2026/04-broll/troy-church/IMG_0599.DNG", "Saint Paul's Lutheran Church\nREFORMATION WEEKEND\n\nSaturday 5 PM · Sunday 9 AM\nBible Class 10:30 AM\n\n112 N. Border St, Troy, IL\nsaintpaulstroy.org", "", 0.5, "in")], 6.0),
+  [("/Users/abc3/Movies/Reformation-2026/04-broll/pastor-on-camera/pastor-closing.mp4", "", "", 0, "live"),
+   ("/Users/abc3/Movies/Reformation-2026/04-broll/troy-church/IMG_0599.DNG", "Saint Paul's Lutheran Church\nREFORMATION WEEKEND\n\nSaturday 5 PM · Sunday 9 AM\nBible Class 10:30 AM\n\n112 N. Border St, Troy, IL\nsaintpaulstroy.org", "", 0.5, "in")], 5.2),
 ]
 
 # ---------------------------------------------------------------- helpers
@@ -183,11 +182,17 @@ for name, voice, line, shots, pad in S:
         audio = seg / "vo.aiff"; source = f"say/{voice}"
         run(["say", "-v", voice, "-r", "178", "-o", str(audio), line])
     vo = dur(audio)
-    lead = 0.0 if live else 1.2 if name == "01-open" else 0.3
-    total = vo if live else lead + vo + pad
-    share = total / len(shots)
+    lead = 0.0 if live else 1.2 if name == "01-open" else 0.2
+    total = vo + pad if live else lead + vo + pad
+    weights = [sh[5] if len(sh) > 5 else 1.0 for sh in shots]
     clips = []
-    for i, (img, cap, slate, dark, zoom) in enumerate(shots):
+    for i, sh in enumerate(shots):
+        img, cap, slate, dark, zoom = sh[:5]
+        if live:
+            others = sum(w for sh2, w in zip(shots, weights) if sh2[4] != "live") or 1.0
+            share = vo if zoom == "live" else pad * weights[i] / others
+        else:
+            share = total * weights[i] / sum(weights)
         mp4 = seg / f"shot{i}.mp4"
         if zoom == "clip":
             video_clip(still(img), share, mp4)
@@ -212,9 +217,9 @@ for name, voice, line, shots, pad in S:
 MUSIC = ROOT / "06-music-sfx/organ-mighty-fortress-v2.mp3"   # FluidSynth + GeneralUser GS; organist recording replaces it
 if not MUSIC.exists(): MUSIC = ROOT / "06-music-sfx/organ-mighty-fortress-v1.mp3"
 if not MUSIC.exists(): MUSIC = ROOT / "06-music-sfx/organ-underscore-v1.mp3"
-dry = WORK / "animatic-v7-nomusic.mp4"
+dry = WORK / "animatic-v8-nomusic.mp4"
 concat(seg_files, dry)
-final = WORK / ("animatic-v7-4k.mp4" if FOURK else "animatic-v7.mp4")
+final = WORK / ("animatic-v8-4k.mp4" if FOURK else "animatic-v8.mp4")
 if MUSIC.exists():
     # music under the whole piece, ducked by the voice, faded out over the last 4 s
     run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(dry), "-i", str(MUSIC), "-filter_complex",
@@ -229,5 +234,5 @@ else:
 report = [f"{'segment':12s} {'start':>7s} {'length':>7s} {'speech':>7s}  voice"]
 report += [f"{n:12s} {s:7.1f} {d:7.1f} {v:7.1f}  {src}" for n, s, d, v, src in timing]
 report += ["", f"TOTAL {t:.1f} s  (cap 90 s)   output: {final}  {W}x{H} @ {FPS} fps", music_note]
-(WORK / "animatic-v7-timing.txt").write_text("\n".join(report) + "\n")
+(WORK / "animatic-v8-timing.txt").write_text("\n".join(report) + "\n")
 print("\n".join(report))

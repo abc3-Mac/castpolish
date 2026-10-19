@@ -5,7 +5,7 @@
 **Online:** facebook.com/stpaultroyil · youtube.com/c/StPaulsTroyIL · instagram.com/saintpaulstroy · logo: saintpaulstroy.org/wp-content/uploads/2021/04/stp-logo-nofooter.jpeg. The Weekly Worship page confirms Sat 5 PM / Sun 9 AM; the About page still shows older times (Sat 6, Sun 8 & 10:30), so double-check the Bible class time.
 **Format:** Vertical 9:16, 4K (2160 x 3840), 24 or 30 fps, stereo 48 kHz
 **Target length:** 85–88 seconds (hard cap 90 s so it posts as a Facebook Reel)
-**Word budget:** ~184 words total (VO + on-camera) at ~150 wpm, leaving room for SFX beats
+**Word budget:** ~185 words total (VO + on-camera) at ~150 wpm, leaving room for SFX beats
 **Services promoted:** Sat 5:00 PM · Sun 9:00 AM · Bible class Sun 10:30 AM, church basement
 **Throughline:** Luther is the way in; Jesus is the point. From the cell onward every segment names or shows Christ, so the video is about the gospel Luther found, not about Luther.
 **Dates assumed:** Sat Oct 24 / Sun Oct 25, 2026 (Reformation Sunday). Confirm before posting.
@@ -26,16 +26,14 @@ Legend: **VO** = ElevenLabs narration · **PASTOR** = on-camera, recorded in the
 | | | **VO:** "He kept that vow. Prayed, fasted, confessed for hours — and was still terrified. How could a sinner stand before a holy God?" |
 | 0:19–0:28 | Pages turning. Light grows across the page, then lifts to a crucifix on the cell wall. Caption: **"The righteous shall live by faith." — Romans 1:17** | *SFX: page turns. MUSIC: a warm major chord resolves.* |
 | | | **VO:** "Then he found it in Romans: 'The righteous shall live by faith.' He'd been climbing toward God. God had already come down — in Jesus. Not earned. Not bought. Given." |
-| 0:28–0:36 | YOUR Wittenberg Castle Church door photo (`05-stills-wittenberg/THESES-DOOR_bronze_2010_IMG_0801.jpg`): start tight on the crucifixion mosaic above the door — Christ on the cross, Luther and Melanchthon kneeling — then tilt down and push in to the bronze door. Caption: **"October 31, 1517"**. Cut to printing-press plates slamming, pages flying. | *SFX: three hammer strikes, then a printing press thump and paper rustle.* |
+| 0:28–0:36 | YOUR Wittenberg Castle Church door photo (`05-stills-wittenberg/THESES-DOOR_bronze_2010_IMG_0801.jpg`): start tight on the crucifixion mosaic above the door — Christ on the cross, Luther and Melanchthon kneeling — then tilt down and push in to the bronze door. Caption: **"October 31, 1517"**. Cut to printing-press plates slamming, pages flying, then four quick pictures (1 s each) under the end of the line: a German Bible, a family at a kitchen table, a congregation singing, an altar cross in daylight. | *SFX: three hammer strikes, then a printing press thump and paper rustle.* |
 | | | **VO:** "October 31, 1517. He nails ninety-five theses to a church door in Wittenberg. The printing press does the rest." |
-| 0:36–0:44 | Fast montage (1 s each): a German Bible, a hymnal open to "A Mighty Fortress", a family at a kitchen table, a child reading a catechism, an altar cross in daylight, YOUR Wittenberg town photos. | *MUSIC: tempo lifts, hopeful.* |
-| | | **VO:** "Soon ordinary people had a Bible in their own language — and met Jesus in it for themselves." |
 | 0:44–0:62 | **PASTOR ON CAMERA.** Sanctuary, altar soft-focused behind, daylight from windows. Medium shot, eyes to lens. Small caption lower third: **Pastor Albert Collver · Saint Paul's Lutheran, Troy, IL** | *MUSIC: ducks to barely audible under speech.* |
 | | | **PASTOR (as recorded 19 Oct 2026, take 2):** "Five hundred years later, the question is the same: *Am I enough?* The answer is no — but Jesus is. Because Jesus died for our sins, he has forgiven you and me. And now we are set free: free to forgive one another, and free to serve our neighbor." |
 | 0:62–0:78 | Church exterior in Troy (the bell-tower photo in `04-broll/troy-church/`, then live B-roll when shot): steeple, sign, front doors opening, candles being lit, a hymnal handed to someone, coffee in the basement classroom, a few friendly faces. Caption builds line by line: **Saturday 5 PM · Sunday 9 AM · Bible Class 10:30 AM** | *SFX: church bell, one or two strikes. MUSIC: "A Mighty Fortress" melody enters clearly.* |
 | | | **VO:** "Join us at Saint Paul's Lutheran in Troy — Saturday at 5, Sunday at 9, Bible class at 10:30. Everyone is welcome." |
-| 0:78–0:88 | END CARD over the sanctuary photo, darkened (hold 8–10 s): church logo/name, **Reformation Weekend**, times, **112 N. Border St., Troy, IL**, **saintpaulstroy.org** or a QR code. Optional: pastor on camera for the last line, then cut to card. | *MUSIC: "A Mighty Fortress" organ swell, final chord rings out and fades.* |
-| | | **PASTOR (on camera or VO):** "Come meet the Jesus Luther found. We'll save you a seat." |
+| 0:78–0:88 | PASTOR ON CAMERA for the last line (recorded 19 Oct, `pastor-closing.mp4`), then cut to the END CARD over the sanctuary photo, darkened (hold 6 s): church logo/name, **Reformation Weekend**, times, **112 N. Border St., Troy, IL**, **saintpaulstroy.org** or a QR code. | *MUSIC: "A Mighty Fortress" organ swell, final chord rings out and fades.* |
+| | | **PASTOR (on camera, as recorded):** "Come meet the Jesus that Luther found. We'll save you a seat." |
 
 ---
 
@@ -51,22 +49,20 @@ Legend: **VO** = ElevenLabs narration · **PASTOR** = on-camera, recorded in the
 >
 > October 31, 1517. He nails ninety-five theses to a church door in Wittenberg. The printing press does the rest.
 >
-> Soon ordinary people had a Bible in their own language — and met Jesus in it for themselves.
->
 > **[PASTOR]** Five hundred years later, the question is the same: Am I enough? The answer is no — but Jesus is. Because Jesus died for our sins, he has forgiven you and me. And now we are set free: free to forgive one another, and free to serve our neighbor.
 >
 > Join us at Saint Paul's Lutheran in Troy — Saturday at 5, Sunday at 9, Bible class at 10:30. Everyone is welcome.
 >
-> **[PASTOR]** Come meet the Jesus Luther found. We'll save you a seat.
+> **[PASTOR]** Come meet the Jesus that Luther found. We'll save you a seat.
 
-Word count: 184. Read at a measured pace, that lands at about 74 s of speech; SFX beats and the end card bring it to roughly 88 s.
+Word count: 185. Read at a measured pace, that lands at about 74 s of speech; SFX beats and the end card bring it to roughly 88 s.
 
 ---
 
 ## If it runs long: the 60–70 second cut
 
 Drop these in order until it fits:
-1. Cut the 0:36–0:44 montage line ("Soon ordinary people had…") — saves ~7 s.
+1. ✅ Applied 19 Oct 2026: the montage narration line is cut and its pictures now run under the end of the door/press line. (Line was: "Soon ordinary people had a Bible in their own language — and met Jesus in it for themselves.")
 2. ✅ Applied 18 Oct 2026 (pastor segment shortened; the longer version — "…and that's the good news, because Jesus is. It was never about Luther. It's about Christ, for you…" — is in git history if the read comes in fast).
 3. ✅ Applied 18 Oct 2026 (invitation shortened).
 
@@ -84,5 +80,5 @@ Measured 18 Oct with the pastor's ElevenLabs clone at natural pace: the full 210
 - "God had already come down — in Jesus" is the script's plain-language gloss on Romans 1:17 read through Romans 3:21–26 and Philippians 2:6–8. It is not a quotation of Luther.
 - The cell segment opens on the **Lutherhaus** (the pastor's photo): the Augustinian "Black Cloister" in Wittenberg where Luther lived as a monk from 1511 and, after 1525, with Katharina and the children. Luther's 1505–1511 monastery years were in Erfurt, so the caption calls it "the Augustinian monastery, Wittenberg" rather than the place of his vow.
 - The opening photo is the **Lutherstein in the Dübener Heide** (granite boulder on the B2 between Bad Düben and Kemberg, the pastor's own photo). Tradition places Luther resting there in 1508 on the road from Erfurt to Wittenberg and preaching from it in 1519 after the Leipzig Disputation; it is inscribed "Eine feste Burg ist Gott" (added 1817). It is **not** the 1505 lightning site — that was Stotternheim, near Erfurt — so the caption says "on Luther's road from Erfurt" and the thunderstorm stays on the painted road.
-- The pastor's segment was recorded 19 Oct 2026 (`04-broll/pastor-on-camera/IMG_0192-raw.mov`, take 2 at 38–57 s, cut to `pastor-take2.mp4`). He spoke it in his own words, about 19 s rather than the scripted 12; the script above now reads as recorded.
+- The pastor's segment was recorded 19 Oct 2026 (`04-broll/pastor-on-camera/IMG_0192-raw.mov`, take 2 at 38–57 s, cut to `pastor-take2.mp4`, 19.7 s); the closing line is `IMG_0193-raw.mov` take at 33.7–37.8 s, cut to `pastor-closing.mp4` (5.2 s), in front of the altar crucifix. He spoke it in his own words, about 19 s rather than the scripted 12; the script above now reads as recorded.
 - The pastor segment and the invitation are the only parts that must be re-recorded if the times change. Keep those as separate takes.

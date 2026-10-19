@@ -22,7 +22,7 @@ for line in open(os.path.expanduser("~/.elevenlabs.env")):
 API, VOICE = env["ELEVENLABS_API_KEY"], env["ELEVENLABS_VOICE_ID"]
 
 paras = [p.strip() for p in (VO / "vo-only.txt").read_text().split("\n\n") if p.strip()]
-names = ["01-open", "02-strike", "03-cell", "04-romans", "05-door", "06-montage", "08-invite"]
+names = ["01-open", "02-strike", "03-cell", "04-romans", "05-door", "08-invite"]
 assert len(paras) == len(names), f"expected {len(names)} narration paragraphs, found {len(paras)}"
 segments = list(zip(names, paras)) + [
     ("07-pastor", "Five hundred years later, the question is the same: Am I enough? The honest answer is no — but Jesus is. You are forgiven, and you are free to love your neighbor."),
@@ -51,7 +51,7 @@ if "--dry" in sys.argv: sys.exit(0)
 for i, (n, t) in enumerate(spoken):
     dst = VO / f"{n}.mp3"
     if dst.exists() and dst.stat().st_size > 2000: print(f"{n}: exists, skip"); continue
-    prev = spoken[i-1][1] if i > 0 and i < 7 else ""; nxt = spoken[i+1][1] if i < 6 else ""
+    prev = spoken[i-1][1] if i > 0 and i < 6 else ""; nxt = spoken[i+1][1] if i < 5 else ""
     try: audio = tts(t, prev, nxt)
     except urllib.error.HTTPError as e: print(f"{n}: HTTP {e.code} -> {e.read().decode()[:300]}"); sys.exit(2)
     if audio[:3] != b"ID3" and audio[0] != 0xFF: print(f"{n}: not audio -> {audio[:120]!r}"); sys.exit(3)
@@ -61,8 +61,8 @@ lines = []; total = 0.0
 for n, _ in spoken:
     d = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(VO / f"{n}.mp3")], capture_output=True, text=True).stdout.strip())
     lines.append(f"{n:12s} {d:6.1f} s"); total += d if not n.startswith(("07", "09")) else 0
-lst = VO / "concat.txt"; lst.write_text("".join(f"file '{VO / (n + '.mp3')}'\n" for n, _ in spoken[:7]))
+lst = VO / "concat.txt"; lst.write_text("".join(f"file '{VO / (n + '.mp3')}'\n" for n, _ in spoken[:6]))
 subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(lst),
                 "-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-ar", "48000", "-ac", "2", "-c:a", "libmp3lame", "-b:a", "160k", str(VO / "vo-all-16lufs.mp3")])
-rep = "\n".join(lines) + f"\n\nnarration only (7 VO segments): {total:.1f} s of speech\n"
+rep = "\n".join(lines) + f"\n\nnarration only (6 VO segments): {total:.1f} s of speech\n"
 (VO / "vo-timing.txt").write_text(rep); print(rep)
