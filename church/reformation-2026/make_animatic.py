@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Animatic of "The Storm and the Door" — Grok stills, your Wittenberg photos, the Grok strike clip,
+"""Animatic of "The Storm and the Door" — the pastor's own photos and footage only (no generated images),
 and the ElevenLabs narration (02-vo/<segment>.mp3; falls back to macOS `say` if a file is missing).
 
 Still placeholders: the pastor's on-camera segment and the Troy B-roll (red STAND-IN bands).
@@ -7,10 +7,10 @@ Music: 06-music-sfx/organ-underscore-v1.mp3 (ElevenLabs Music stand-in) ducked u
 
 Usage:  python3 make_animatic.py            # 1080x1920 draft
         python3 make_animatic.py --4k       # 2160x3840
-Output: 07-edit/animatic/animatic-v8.mp4 and animatic-v8-timing.txt
+Output: 07-edit/animatic/animatic-v9.mp4 and animatic-v9-timing.txt
 """
 import subprocess, sys, pathlib, textwrap, shutil
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageEnhance
 
 ROOT = pathlib.Path.home() / "Movies/Reformation-2026"
 STILLS = ROOT / "05-stills-wittenberg"
@@ -35,23 +35,22 @@ def still(rel):
 # Each: name, fallback voice, line, shots [(image|clip|None, caption, slate, darken, zoom)], pad seconds
 S = [
  ("01-open", VO_VOICE, "A storm. A dirt road. A young law student, alone.",
-  [("LUTHERSTEIN_Duebener-Heide_IMG_4706.jpg#center=0.35,0.6", "Is God for or\nagainst me?\n\n§The Lutherstein, Dübener Heide — on Luther's road from Erfurt", "", 0.45, "in"),
-   ("grok:G1-road/G1-road-v1.jpg", "§July 1505 · A road near Erfurt, Germany", "", 0.3, "in")], 1.0),
+  [("LUTHERSTEIN_Duebener-Heide_IMG_4706.jpg#center=0.35,0.6", "Is God for or\nagainst me?\n\n§The Lutherstein, Dübener Heide — on Luther's road from Erfurt", "", 0.45, "in")], 1.0),
  ("02-strike", VO_VOICE, "Lightning strikes so close it throws him to the ground. Martin Luther cries out: \"Saint Anne, help me! I will become a monk!\"",
-  [("grok:G2-strike/G2-strike-v2.mp4", "", "", 0, "clip")], 0.35),
+  [("LUTHERSTEIN_Duebener-Heide_IMG_4706.jpg#center=0.62,0.35", "§July 1505 · the road near Erfurt", "", 0.55, "storm", 4.3),
+   ("LUTHER_portrait_Cranach.jpg#center=0.5,0.42", "§Martin Luther · Lucas Cranach the Elder", "", 0.1, "in", 5.7)], 0.35),
  ("03-cell", VO_VOICE, "He kept that vow. Prayed, fasted, confessed for hours — and was still terrified. How could a sinner stand before a holy God?",
-  [("LUTHERHAUS_Wittenberg_Augustinian-monastery.jpg#center=0.5,0.45", "§The Augustinian monastery, Wittenberg — later Luther's home", "", 0.3, "in"),
-   ("grok:G3-cell/G3-cell-v1.jpg", "", "", 0.1, "in")], 0.35),
+  [("ERFURT_Augustinian-monastery_cloister.jpg#center=0.5,0.5", "§The Augustinian monastery, Erfurt — where Luther became a monk", "", 0.25, "in", 1.1),
+   ("ERFURT_Augustinian-monastery_altar.jpg#center=0.56,0.45", "§The altar where Luther lay prostrate before God", "", 0.15, "in", 1.0)], 0.35),
  ("04-romans", VO_VOICE, "Then he found it in Romans: \"The righteous shall live by faith.\" He'd been climbing toward God. God had already come down — in Jesus. Not earned. Not bought. Given.",
-  [("grok:G4-page/G4-page-v2.jpg", "“The righteous shall live by faith.”\n— Romans 1:17", "", 0.05, "in"),
-   ("grok:G4b-cross/G4b-cross-v2.jpg", "", "", 0.0, "in")], 0.35),
+  [("ERFURT_Augustinian-monastery_altar.jpg#center=0.63,0.42", "“The righteous shall live by faith.”\n— Romans 1:17", "", 0.1, "in", 1.0),
+   ("THESES-DOOR_bronze_2010_IMG_0801.jpg#mosaic", "", "", 0.0, "in", 1.0)], 0.35),
  ("05-door", VO_VOICE, "October 31, 1517. He nails ninety-five theses to a church door in Wittenberg. The printing press does the rest.",
-  [("THESES-DOOR_bronze_2010_IMG_0801.jpg", "October 31, 1517", "", 0.05, "in", 4.0),
-   ("grok:G6-press/G6-press-v1.jpg", "", "", 0.0, "out", 2.5),
-   ("grok:G7a-bible/G7a-bible-v1.jpg", "", "", 0.0, "in", 1.0),
-   ("grok:G7b-family/G7b-family-v1.jpg", "", "", 0.0, "out", 1.0),
-   ("grok:G7c-singing/G7c-singing-v1.jpg", "", "", 0.0, "in", 1.0),
-   ("grok:G7d-altar-cross/G7d-altar-cross-v1.jpg", "", "", 0.0, "in", 1.0)], 0.3),
+  [("THESES-DOOR_bronze_2010_IMG_0801.jpg", "October 31, 1517", "", 0.05, "in", 3.3),
+   ("LUTHERHAUS_Wittenberg_wide_with-Katharina-statue.jpg#pan=0.15,0.62", "", "", 0.0, "pan", 2.6),
+   ("google-album-wittenberg-2010/036_IMG_0865.JPG#center=0.5,0.45", "", "", 0.0, "in", 1.7),
+   ("google-album-wittenberg-2010/029_IMG_0853.JPG#center=0.55,0.4", "", "", 0.05, "out", 1.2),
+   ("STADTKIRCHE_Wittenberg_towers_IMG_0299.jpg#center=0.5,0.4", "", "", 0.0, "in", 1.4)], 0.3),
  ("07-pastor", PASTOR_VOICE, "Five hundred years later, the question is the same: Am I enough? The honest answer is no — but Jesus is. You are forgiven, and you are free to love your neighbor.",
   [("/Users/abc3/Movies/Reformation-2026/04-broll/pastor-on-camera/pastor-take2.mp4", "Pastor Albert Collver · Saint Paul's Lutheran, Troy, IL", "", 0, "live")], 0),
  ("08-invite", VO_VOICE, "Join us at Saint Paul's Lutheran in Troy — Saturday at 5, Sunday at 9, Bible class at 10:30. Everyone is welcome.",
@@ -198,6 +197,23 @@ for name, voice, line, shots, pad in S:
             video_clip(still(img), share, mp4)
         elif zoom == "live":
             video_clip(still(img), share, mp4, caption=cap, keep_audio=False, grain=False)
+        elif zoom == "pan":
+            name, _, spec = img.partition("#"); a, b = (float(v) for v in spec[4:].split(",")) if spec.startswith("pan=") else (0.0, 1.0)
+            src = still(name); frames = max(1, int(round(share * FPS)))
+            if src.suffix.lower() in (".heic", ".dng"):
+                jpg = WORK / (src.stem + ".jpg"); jpg.exists() or run(["sips", "-s", "format", "jpeg", str(src), "--out", str(jpg)]); src = jpg
+            vf = (f"scale=-2:{H},crop={W}:{H}:x='(iw-ow)*({a}+({b}-{a})*min(n/{frames},1))':y=0,fps={FPS}")
+            run(["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-framerate", str(FPS), "-i", str(src), "-vf", vf, "-frames:v", str(frames), *ENC, str(mp4)])
+        elif zoom == "storm":
+            png = seg / f"shot{i}.png"
+            fr = render_frame(img, cap, slate, dark)
+            fr = ImageEnhance.Color(fr).enhance(0.35)
+            fr = Image.blend(fr, Image.new("RGB", fr.size, (18, 28, 55)), 0.30)
+            fr.save(png)
+            raw = seg / f"shot{i}-raw.mp4"; shot_clip(png, share, "in", raw)
+            run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(raw), "-f", "lavfi", "-i", f"color=white:s={W}x{H}:r={FPS}",
+                 "-filter_complex", "[0:v]format=gbrp[a];[1:v]format=gbrp[w];[a][w]blend=all_mode=screen:all_opacity=0.9:enable='between(t,0.80,0.90)+between(t,0.97,1.03)+between(t,1.20,1.24)+between(t,3.9,3.96)',format=yuv420p[v]",
+                 "-map", "[v]", "-t", f"{share:.3f}", *ENC, str(mp4)])
         else:
             png = seg / f"shot{i}.png"
             render_frame(img, cap, slate, dark).save(png)
@@ -217,9 +233,9 @@ for name, voice, line, shots, pad in S:
 MUSIC = ROOT / "06-music-sfx/organ-mighty-fortress-v2.mp3"   # FluidSynth + GeneralUser GS; organist recording replaces it
 if not MUSIC.exists(): MUSIC = ROOT / "06-music-sfx/organ-mighty-fortress-v1.mp3"
 if not MUSIC.exists(): MUSIC = ROOT / "06-music-sfx/organ-underscore-v1.mp3"
-dry = WORK / "animatic-v8-nomusic.mp4"
+dry = WORK / "animatic-v9-nomusic.mp4"
 concat(seg_files, dry)
-final = WORK / ("animatic-v8-4k.mp4" if FOURK else "animatic-v8.mp4")
+final = WORK / ("animatic-v9-4k.mp4" if FOURK else "animatic-v9.mp4")
 if MUSIC.exists():
     # music under the whole piece, ducked by the voice, faded out over the last 4 s
     run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(dry), "-i", str(MUSIC), "-filter_complex",
@@ -234,5 +250,5 @@ else:
 report = [f"{'segment':12s} {'start':>7s} {'length':>7s} {'speech':>7s}  voice"]
 report += [f"{n:12s} {s:7.1f} {d:7.1f} {v:7.1f}  {src}" for n, s, d, v, src in timing]
 report += ["", f"TOTAL {t:.1f} s  (cap 90 s)   output: {final}  {W}x{H} @ {FPS} fps", music_note]
-(WORK / "animatic-v8-timing.txt").write_text("\n".join(report) + "\n")
+(WORK / "animatic-v9-timing.txt").write_text("\n".join(report) + "\n")
 print("\n".join(report))
