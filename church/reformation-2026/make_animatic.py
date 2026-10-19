@@ -7,7 +7,7 @@ Music: 06-music-sfx/organ-underscore-v1.mp3 (ElevenLabs Music stand-in) ducked u
 
 Usage:  python3 make_animatic.py            # 1080x1920 draft
         python3 make_animatic.py --4k       # 2160x3840
-Output: 07-edit/animatic/animatic-v9.mp4 and animatic-v9-timing.txt
+Output: 07-edit/animatic/animatic-v10.mp4 and animatic-v10-timing.txt
 """
 import subprocess, sys, pathlib, textwrap, shutil
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageEnhance
@@ -43,7 +43,7 @@ S = [
   [("ERFURT_Augustinian-monastery_cloister.jpg#center=0.5,0.5", "§The Augustinian monastery, Erfurt — where Luther became a monk", "", 0.25, "in", 1.1),
    ("ERFURT_Augustinian-monastery_altar.jpg#center=0.56,0.45", "§The altar where Luther lay prostrate before God", "", 0.15, "in", 1.0)], 0.35),
  ("04-romans", VO_VOICE, "Then he found it in Romans: \"The righteous shall live by faith.\" He'd been climbing toward God. God had already come down — in Jesus. Not earned. Not bought. Given.",
-  [("ERFURT_Augustinian-monastery_altar.jpg#center=0.63,0.42", "“The righteous shall live by faith.”\n— Romans 1:17", "", 0.1, "in", 1.0),
+  [("LUTHERSTUBE_Luthers-study_Lutherhaus.jpg#center=0.82,0.5", "“The righteous shall live by faith.”\n— Romans 1:17\n\n§Luther's study, Wittenberg", "", 0.1, "in", 1.0),
    ("THESES-DOOR_bronze_2010_IMG_0801.jpg#mosaic", "", "", 0.0, "in", 1.0)], 0.35),
  ("05-door", VO_VOICE, "October 31, 1517. He nails ninety-five theses to a church door in Wittenberg. The printing press does the rest.",
   [("THESES-DOOR_bronze_2010_IMG_0801.jpg", "October 31, 1517", "", 0.05, "in", 3.3),
@@ -233,9 +233,9 @@ for name, voice, line, shots, pad in S:
 MUSIC = ROOT / "06-music-sfx/organ-mighty-fortress-v2.mp3"   # FluidSynth + GeneralUser GS; organist recording replaces it
 if not MUSIC.exists(): MUSIC = ROOT / "06-music-sfx/organ-mighty-fortress-v1.mp3"
 if not MUSIC.exists(): MUSIC = ROOT / "06-music-sfx/organ-underscore-v1.mp3"
-dry = WORK / "animatic-v9-nomusic.mp4"
+dry = WORK / "animatic-v10-nomusic.mp4"
 concat(seg_files, dry)
-final = WORK / ("animatic-v9-4k.mp4" if FOURK else "animatic-v9.mp4")
+final = WORK / ("animatic-v10-4k.mp4" if FOURK else "animatic-v10.mp4")
 if MUSIC.exists():
     # music under the whole piece, ducked by the voice, faded out over the last 4 s
     run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(dry), "-i", str(MUSIC), "-filter_complex",
@@ -250,5 +250,5 @@ else:
 report = [f"{'segment':12s} {'start':>7s} {'length':>7s} {'speech':>7s}  voice"]
 report += [f"{n:12s} {s:7.1f} {d:7.1f} {v:7.1f}  {src}" for n, s, d, v, src in timing]
 report += ["", f"TOTAL {t:.1f} s  (cap 90 s)   output: {final}  {W}x{H} @ {FPS} fps", music_note]
-(WORK / "animatic-v9-timing.txt").write_text("\n".join(report) + "\n")
+(WORK / "animatic-v10-timing.txt").write_text("\n".join(report) + "\n")
 print("\n".join(report))
