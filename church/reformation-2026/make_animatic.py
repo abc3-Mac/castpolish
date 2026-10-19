@@ -7,7 +7,7 @@ Music: 06-music-sfx/organ-underscore-v1.mp3 (ElevenLabs Music stand-in) ducked u
 
 Usage:  python3 make_animatic.py            # 1080x1920 draft
         python3 make_animatic.py --4k       # 2160x3840
-Output: 07-edit/animatic/animatic-v11.mp4 and animatic-v11-timing.txt
+Output: 07-edit/animatic/animatic-v12.mp4 and animatic-v12-timing.txt
 """
 import subprocess, sys, pathlib, textwrap, shutil
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageEnhance
@@ -174,8 +174,8 @@ for name, voice, line, shots, pad in S:
     if live:
         src = still(live[0][0]); audio = seg / "live.wav"; source = "on camera"
         run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-vn", "-ac", "2", "-ar", "48000",
-             "-af", "highpass=f=90,afftdn=nf=-28:nr=10,equalizer=f=250:t=q:w=1.2:g=-2,equalizer=f=3200:t=q:w=1.0:g=3,"
-                    "acompressor=threshold=-22dB:ratio=3:attack=8:release=120:makeup=4,loudnorm=I=-17:TP=-2:LRA=9", str(audio)])
+             # the clips in 04-broll already carry Auphonic speech-isolated audio (19 Oct); only match loudness here
+             "-af", "loudnorm=I=-17:TP=-2:LRA=9", str(audio)])
     elif real.exists():
         audio = seg / "vo-norm.wav"; source = "ElevenLabs"
         run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(real), "-ac", "2", "-ar", "48000",
@@ -236,9 +236,9 @@ for name, voice, line, shots, pad in S:
 MUSIC = ROOT / "06-music-sfx/organ-mighty-fortress-v2.mp3"   # FluidSynth + GeneralUser GS; organist recording replaces it
 if not MUSIC.exists(): MUSIC = ROOT / "06-music-sfx/organ-mighty-fortress-v1.mp3"
 if not MUSIC.exists(): MUSIC = ROOT / "06-music-sfx/organ-underscore-v1.mp3"
-dry = WORK / "animatic-v11-nomusic.mp4"
+dry = WORK / "animatic-v12-nomusic.mp4"
 concat(seg_files, dry)
-final = WORK / ("animatic-v11-4k.mp4" if FOURK else "animatic-v11.mp4")
+final = WORK / ("animatic-v12-4k.mp4" if FOURK else "animatic-v12.mp4")
 if MUSIC.exists():
     # music under the whole piece, ducked by the voice, faded out over the last 4 s
     run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(dry), "-i", str(MUSIC), "-filter_complex",
@@ -253,5 +253,5 @@ else:
 report = [f"{'segment':12s} {'start':>7s} {'length':>7s} {'speech':>7s}  voice"]
 report += [f"{n:12s} {s:7.1f} {d:7.1f} {v:7.1f}  {src}" for n, s, d, v, src in timing]
 report += ["", f"TOTAL {t:.1f} s  (cap 90 s)   output: {final}  {W}x{H} @ {FPS} fps", music_note]
-(WORK / "animatic-v11-timing.txt").write_text("\n".join(report) + "\n")
+(WORK / "animatic-v12-timing.txt").write_text("\n".join(report) + "\n")
 print("\n".join(report))

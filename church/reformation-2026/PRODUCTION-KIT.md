@@ -100,7 +100,7 @@ Tips: ask for 2–3 variations of G2 (the strike) — it's the money shot. If Gr
 **Which lines are NOT ElevenLabs:** the pastor segment (0:44–0:62) and the closing line are the pastor on camera. Optional: the invitation (0:62–0:78) also works better as the pastor's real voice over B-roll. Record both and decide in the edit.
 
 
-**Voice levelling (19 Oct 2026, in `make_animatic.py`):** every narration segment is loudness-normalised to -17 LUFS; the on-camera clips get high-pass 90 Hz, light FFT noise reduction, -2 dB at 250 Hz, +3 dB at 3.2 kHz, 3:1 compression, then the same -17 LUFS, so the phone sound sits beside the close-miked narration. The final mix (voice + ducked organ) is mastered to -14 LUFS / -1.5 dBTP. First 4K master: `08-exports/reformation-2026-master-9x16-DRAFT-v11.mp4` passes `check-master.sh`.
+**Voice clean-up (19 Oct 2026):** the on-camera clips' audio is run through **Auphonic** (auphonic.com, the pastor's account): Denoising Method = "Speech Isolation: keep speech, remove everything else", Remove Reverb = 100 dB (full), Adaptive Leveler on, -16 LUFS, output WAV 24-bit. The result is muxed back into `04-broll/pastor-on-camera/pastor-take2.mp4` and `pastor-closing.mp4` (`*-auphonic.wav` beside them; the phone-audio versions kept as `*-phone-audio.mp4`). The in-ffmpeg EQ/compression chain is retired; `make_animatic.py` now only loudness-matches every voice segment to -17 LUFS. The final mix (voice + ducked organ) is mastered to -14 LUFS / -1.5 dBTP. First 4K master: `08-exports/reformation-2026-master-9x16-DRAFT-v11.mp4` passes `check-master.sh`.
 
 ## 5. Music and sound effects
 
