@@ -174,9 +174,12 @@ for name, voice, line, shots, pad in S:
     if live:
         src = still(live[0][0]); audio = seg / "live.wav"; source = "on camera"
         run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-vn", "-ac", "2", "-ar", "48000",
-             "-af", "loudnorm=I=-16:TP=-1.5:LRA=11", str(audio)])
+             "-af", "highpass=f=90,afftdn=nf=-28:nr=10,equalizer=f=250:t=q:w=1.2:g=-2,equalizer=f=3200:t=q:w=1.0:g=3,"
+                    "acompressor=threshold=-22dB:ratio=3:attack=8:release=120:makeup=4,loudnorm=I=-17:TP=-2:LRA=9", str(audio)])
     elif real.exists():
-        audio = real; source = "ElevenLabs"
+        audio = seg / "vo-norm.wav"; source = "ElevenLabs"
+        run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(real), "-ac", "2", "-ar", "48000",
+             "-af", "loudnorm=I=-17:TP=-2:LRA=9", str(audio)])
     else:
         audio = seg / "vo.aiff"; source = f"say/{voice}"
         run(["say", "-v", voice, "-r", "178", "-o", str(audio), line])
@@ -242,7 +245,7 @@ if MUSIC.exists():
          f"[1:a]atrim=0:{t:.3f},asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo,"
          f"afade=t=in:st=0:d=3,afade=t=out:st={t-4:.3f}:d=4,volume=0.55[m];"
          f"[0:a]asplit[n][sc];[m][sc]sidechaincompress=threshold=0.03:ratio=5:attack=30:release=700:makeup=1[md];"
-         f"[n][md]amix=inputs=2:duration=first:normalize=0,loudnorm=I=-16:TP=-1.5:LRA=11[a]",
+         f"[n][md]amix=inputs=2:duration=first:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[a]",
          "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", str(final)])
     music_note = f"music: {MUSIC.name} (ducked under voice)"
 else:
