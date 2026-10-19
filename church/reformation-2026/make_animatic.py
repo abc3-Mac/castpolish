@@ -7,7 +7,7 @@ Music: 06-music-sfx/organ-underscore-v1.mp3 (ElevenLabs Music stand-in) ducked u
 
 Usage:  python3 make_animatic.py            # 1080x1920 draft
         python3 make_animatic.py --4k       # 2160x3840
-Output: 07-edit/animatic/animatic-v4.mp4 and animatic-v4-timing.txt
+Output: 07-edit/animatic/animatic-v5.mp4 and animatic-v5-timing.txt
 """
 import subprocess, sys, pathlib, textwrap, shutil
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -35,7 +35,8 @@ def still(rel):
 # Each: name, fallback voice, line, shots [(image|clip|None, caption, slate, darken, zoom)], pad seconds
 S = [
  ("01-open", VO_VOICE, "A storm. A dirt road. A young law student, alone.",
-  [("grok:G1-road/G1-road-v1.jpg", "Is God for or\nagainst me?\n\n§July 1505 · A road near Erfurt, Germany", "", 0.3, "in")], 1.0),
+  [("LUTHERSTEIN_Duebener-Heide_IMG_4706.jpg#center=0.35,0.6", "Is God for or\nagainst me?\n\n§The Lutherstein, Dübener Heide — on Luther's road from Erfurt", "", 0.45, "in"),
+   ("grok:G1-road/G1-road-v1.jpg", "§July 1505 · A road near Erfurt, Germany", "", 0.3, "in")], 1.0),
  ("02-strike", VO_VOICE, "Lightning strikes so close it throws him to the ground. Martin Luther cries out: \"Saint Anne, help me! I will become a monk!\"",
   [("grok:G2-strike/G2-strike-v2.mp4", "", "", 0, "clip")], 0.35),
  ("03-cell", VO_VOICE, "He kept that vow. Prayed, fasted, confessed for hours — and was still terrified. How could a sinner stand before a holy God?",
@@ -115,6 +116,7 @@ def render_frame(image_rel, caption, slate, darken):
         lines = [textwrap.fill(l, 28) if (l and not l.startswith("§")) else l for l in caption.split("\n")]
         n = sum(1 for l in lines if not l.startswith("§")) + sum(0.6 for l in lines if l.startswith("§"))
         y = RH * 0.42 - n * f.size * 1.25 / 2 if (image_rel is None or big or title) else RH * 0.70
+        if all(l.startswith("§") or not l for l in lines): y = RH * 0.80
         for l in lines:
             if l.startswith("§"):
                 draw_center(d, l[1:], fs, y, (230, 220, 200)); y += fs.size * 1.4
@@ -184,11 +186,12 @@ for name, voice, line, shots, pad in S:
          "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-shortest", str(out)])
     timing.append((name, t, total, vo, source)); t += total; seg_files.append(out)
 
-MUSIC = ROOT / "06-music-sfx/organ-mighty-fortress-v1.mp3"   # synthesized Ein feste Burg; organist recording replaces it
+MUSIC = ROOT / "06-music-sfx/organ-mighty-fortress-v2.mp3"   # FluidSynth + GeneralUser GS; organist recording replaces it
+if not MUSIC.exists(): MUSIC = ROOT / "06-music-sfx/organ-mighty-fortress-v1.mp3"
 if not MUSIC.exists(): MUSIC = ROOT / "06-music-sfx/organ-underscore-v1.mp3"
-dry = WORK / "animatic-v4-nomusic.mp4"
+dry = WORK / "animatic-v5-nomusic.mp4"
 concat(seg_files, dry)
-final = WORK / ("animatic-v4-4k.mp4" if FOURK else "animatic-v4.mp4")
+final = WORK / ("animatic-v5-4k.mp4" if FOURK else "animatic-v5.mp4")
 if MUSIC.exists():
     # music under the whole piece, ducked by the voice, faded out over the last 4 s
     run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(dry), "-i", str(MUSIC), "-filter_complex",
@@ -203,5 +206,5 @@ else:
 report = [f"{'segment':12s} {'start':>7s} {'length':>7s} {'speech':>7s}  voice"]
 report += [f"{n:12s} {s:7.1f} {d:7.1f} {v:7.1f}  {src}" for n, s, d, v, src in timing]
 report += ["", f"TOTAL {t:.1f} s  (cap 90 s)   output: {final}  {W}x{H} @ {FPS} fps", music_note]
-(WORK / "animatic-v4-timing.txt").write_text("\n".join(report) + "\n")
+(WORK / "animatic-v5-timing.txt").write_text("\n".join(report) + "\n")
 print("\n".join(report))

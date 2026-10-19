@@ -18,6 +18,7 @@ Everything needed to produce a 90-second vertical 4K video, "The Storm and the D
 | `check-master.sh` | Verifies the final export: 9:16, 4K, under 90 s, loudness |
 | `render_vo.py` | Renders the narration in the pastor's ElevenLabs voice clone (same voice/settings as the podcast pipeline) into `02-vo/` |
 | `generate_stills.py` | Generates the Grok stills (G1–G8) with the Grok CLI's image tools into `03-grok-clips/` |
+| `hymn_midi.py` | Writes "A Mighty Fortress" as MIDI with registration changes and renders it through FluidSynth + GeneralUser GS (`brew install fluidsynth`; soundfont in `~/Library/Audio/Sounds/Banks/`) |
 | `organ_mighty_fortress.py` | Synthesizes "A Mighty Fortress" (Mutopia's public-domain SATB setting) as a pipe organ with registration that builds across the video, into `06-music-sfx/` |
 | `gen_underscore.py` | Generates a stand-in pipe-organ underscore (Lutheran chorale idiom) with the ElevenLabs Music API into `06-music-sfx/` |
 | `make_animatic.py` | Builds a rough timing animatic from the stills with macOS voices (`python3 07-edit/make_animatic.py`, add `--4k` for full size) |

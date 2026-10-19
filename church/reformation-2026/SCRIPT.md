@@ -18,7 +18,7 @@ Legend: **VO** = ElevenLabs narration · **PASTOR** = on-camera, recorded in the
 
 | Time | Visual | Audio |
 |---|---|---|
-| 0:00–0:03 | Rain over the dark road (G1). Title fades up: **"Is God for or against me?"**, with a small caption beneath: **"July 1505 · A road near Erfurt, Germany"** | *SFX: steady rain, distant thunder rolling. No music yet.* |
+| 0:00–0:03 | YOUR Lutherstein photo (Dübener Heide, the boulder on Luther's road from Erfurt), slow push-in, then the painted storm road (G1). Title fades up: **"Is God for or against me?"**, with a small caption beneath: **"July 1505 · A road near Erfurt, Germany"** | *SFX: steady rain, distant thunder rolling. No music yet.* |
 | | | **VO (low, close, unhurried):** "A storm. A dirt road. A young law student, alone." |
 | 0:03–0:10 | Grok composite: painterly 16th-century road, a cloaked figure, sky splits with lightning. Hard white flash on the strike. Figure thrown down in the mud. | *SFX: lightning crack, LOUD, then ringing silence.* |
 | | | **VO:** "Lightning strikes so close it throws him to the ground. Martin Luther cries out: 'Saint Anne, help me! I will become a monk!'" |
@@ -82,4 +82,5 @@ Measured 18 Oct with the pastor's ElevenLabs clone at natural pace: the full 210
 - The German New Testament was translated at the Wartburg in about eleven weeks (1521–22) — a good fact for the Bible class or a follow-up post, not needed in the 90 s.
 - "It was never about Luther" is Luther's own position. In 1522 he wrote: "I ask that men make no reference to my name; let them call themselves Christians, not Lutherans. What is Luther? After all, the teaching is not mine. Neither was I crucified for anyone." (A Sincere Admonition to All Christians, 1522; LW 45:70.)
 - "God had already come down — in Jesus" is the script's plain-language gloss on Romans 1:17 read through Romans 3:21–26 and Philippians 2:6–8. It is not a quotation of Luther.
+- The opening photo is the **Lutherstein in the Dübener Heide** (granite boulder on the B2 between Bad Düben and Kemberg, the pastor's own photo). Tradition places Luther resting there in 1508 on the road from Erfurt to Wittenberg and preaching from it in 1519 after the Leipzig Disputation; it is inscribed "Eine feste Burg ist Gott" (added 1817). It is **not** the 1505 lightning site — that was Stotternheim, near Erfurt — so the caption says "on Luther's road from Erfurt" and the thunderstorm stays on the painted road.
 - The pastor segment and the invitation are the only parts that must be re-recorded if the times change. Keep those as separate takes.

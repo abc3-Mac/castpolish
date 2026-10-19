@@ -18,7 +18,7 @@ cp "$SRC/check-master.sh" "$DEST/08-exports/"
 cp "$SRC/make_animatic.py" "$DEST/07-edit/"
 cp "$SRC/generate_stills.py" "$DEST/03-grok-clips/"
 cp "$SRC/render_vo.py" "$DEST/02-vo/"
-cp "$SRC/gen_underscore.py" "$SRC/organ_mighty_fortress.py" "$DEST/06-music-sfx/"
+cp "$SRC/gen_underscore.py" "$SRC/organ_mighty_fortress.py" "$SRC/hymn_midi.py" "$DEST/06-music-sfx/"
 chmod +x "$DEST/08-exports/check-master.sh"
 
 # Grok prompts as a standalone file the Grok agent can read
@@ -44,6 +44,8 @@ echo "Checking tools..."
 if command -v brew >/dev/null 2>&1; then echo "  Homebrew: ok"; else echo "  Homebrew: missing  ->  https://brew.sh"; fi
 if command -v ffmpeg >/dev/null 2>&1; then echo "  ffmpeg: ok"; else echo "  ffmpeg: missing  ->  brew install ffmpeg"; fi
 if command -v ffprobe >/dev/null 2>&1; then echo "  ffprobe: ok"; else echo "  ffprobe: missing  ->  brew install ffmpeg"; fi
+if command -v fluidsynth >/dev/null 2>&1; then echo "  fluidsynth: ok"; else echo "  fluidsynth: missing  ->  brew install fluidsynth (for the organ stand-in)"; fi
+if [ -f "$HOME/Library/Audio/Sounds/Banks/GeneralUser-GS.sf2" ]; then echo "  GeneralUser GS soundfont: ok"; else echo "  GeneralUser GS soundfont: missing  ->  github.com/mrbumpy409/GeneralUser-GS -> ~/Library/Audio/Sounds/Banks/"; fi
 
 echo
 echo "Done. Next: AirDrop phone footage into $DEST/04-broll/ and open HANDOFF.md in 01-script/."
