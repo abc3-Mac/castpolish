@@ -7,7 +7,7 @@ Music: 06-music-sfx/organ-underscore-v1.mp3 (ElevenLabs Music stand-in) ducked u
 
 Usage:  python3 make_animatic.py            # 1080x1920 draft
         python3 make_animatic.py --4k       # 2160x3840
-Output: 07-edit/animatic/animatic-v10.mp4 and animatic-v10-timing.txt
+Output: 07-edit/animatic/animatic-v11.mp4 and animatic-v11-timing.txt
 """
 import subprocess, sys, pathlib, textwrap, shutil
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageEnhance
@@ -57,7 +57,7 @@ S = [
   [("/Users/abc3/Movies/Reformation-2026/04-broll/troy-church/IMG_4628.HEIC#center=0.27,0.45", "Saturday 5 PM\nSunday 9 AM\nBible Class 10:30 AM", "", 0.45, "in")], 0.3),
  ("09-end", PASTOR_VOICE, "Come meet the Jesus Luther found. We'll save you a seat.",
   [("/Users/abc3/Movies/Reformation-2026/04-broll/pastor-on-camera/pastor-closing.mp4", "", "", 0, "live"),
-   ("/Users/abc3/Movies/Reformation-2026/04-broll/troy-church/IMG_0599.DNG", "Saint Paul's Lutheran Church\nREFORMATION WEEKEND\n\nSaturday 5 PM · Sunday 9 AM\nBible Class 10:30 AM\n\n112 N. Border St, Troy, IL\nsaintpaulstroy.org", "", 0.5, "in")], 5.2),
+   ("/Users/abc3/Movies/Reformation-2026/04-broll/troy-church/IMG_0599.DNG", "Saint Paul's Lutheran Church\nREFORMATION WEEKEND\n\nSaturday 5 PM · Sunday 9 AM\nBible Class 10:30 AM\n\n112 N. Border St, Troy, IL\nsaintpaulstroy.org\nfacebook.com/stpaultroyil", "", 0.5, "in")], 5.2),
 ]
 
 # ---------------------------------------------------------------- helpers
@@ -233,9 +233,9 @@ for name, voice, line, shots, pad in S:
 MUSIC = ROOT / "06-music-sfx/organ-mighty-fortress-v2.mp3"   # FluidSynth + GeneralUser GS; organist recording replaces it
 if not MUSIC.exists(): MUSIC = ROOT / "06-music-sfx/organ-mighty-fortress-v1.mp3"
 if not MUSIC.exists(): MUSIC = ROOT / "06-music-sfx/organ-underscore-v1.mp3"
-dry = WORK / "animatic-v10-nomusic.mp4"
+dry = WORK / "animatic-v11-nomusic.mp4"
 concat(seg_files, dry)
-final = WORK / ("animatic-v10-4k.mp4" if FOURK else "animatic-v10.mp4")
+final = WORK / ("animatic-v11-4k.mp4" if FOURK else "animatic-v11.mp4")
 if MUSIC.exists():
     # music under the whole piece, ducked by the voice, faded out over the last 4 s
     run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(dry), "-i", str(MUSIC), "-filter_complex",
@@ -250,5 +250,5 @@ else:
 report = [f"{'segment':12s} {'start':>7s} {'length':>7s} {'speech':>7s}  voice"]
 report += [f"{n:12s} {s:7.1f} {d:7.1f} {v:7.1f}  {src}" for n, s, d, v, src in timing]
 report += ["", f"TOTAL {t:.1f} s  (cap 90 s)   output: {final}  {W}x{H} @ {FPS} fps", music_note]
-(WORK / "animatic-v10-timing.txt").write_text("\n".join(report) + "\n")
+(WORK / "animatic-v11-timing.txt").write_text("\n".join(report) + "\n")
 print("\n".join(report))
