@@ -28,7 +28,7 @@ Is God For or Against Me? | Reformation Weekend at St. Paul's, Troy
 >
 > #Reformation #MartinLuther #Lutheran #LCMS #ReformationDay #TroyIL #MetroEast #Church #AMightyFortress #Wittenberg
 
-**Settings:** Not made for kids. No chapters. Upload the SRT caption file. Thumbnail: the opening frame (the Lutherstein under "Is God for or against me?") or the end card.
+**Settings:** Not made for kids. No chapters. Upload the SRT caption file. **Thumbnails (made 19 Oct):** `thumbnails/thumbnail-1280x720.jpg` for the YouTube watch page, `thumbnails/thumbnail-vertical-1080x1920.jpg` for the Short / Facebook Reel cover — the Lutherstein under "Is God for or against me?" with the weekend and the church beneath. Both under 1 MB.
 
 ## Facebook Reel / page post
 
