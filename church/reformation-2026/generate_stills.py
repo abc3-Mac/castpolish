@@ -24,8 +24,8 @@ CLIPS = {
    f'figure, a blinding white flash lighting the whole scene, the figure thrown backward into the mud, smoke and rain. {HEADER}" '
    'Then reply with the saved file path only.'),
  "G3-cell": gen("Stone monastery cell, one candle on a wooden desk, a kneeling monk seen from behind, hands clasped around a worn leather Bible, breath visible in the cold air. Very dark, very still."),
- "G4-page": gen("Extreme close-up of a hand-printed Latin Bible page on a wooden desk, warm golden light growing from the top of the frame until the page glows, dust drifting in the light."),
- "G4b-cross": gen("A plain wooden cross on a rough stone wall above a monk's desk, a single candle below it, warm light catching the wood, deep shadow around, quiet and reverent."),
+ "G4-page": gen("Extreme close-up of an open hand-printed Latin Bible on a wooden desk, the page headed with the large words EPISTOLA AD ROMANOS and nothing else legible, dense blackletter text below, warm golden light growing from the top of the frame until the page glows, dust drifting in the light."),
+ "G4b-cross": gen("A wooden crucifix with the carved body of Christ on the cross, hanging on a rough stone wall above a monk's desk, a single candle below it, warm light catching the carved figure, deep shadow around, quiet and reverent. The figure of Christ is clearly present on the cross."),
  "G6-press": gen("Wooden Gutenberg-style printing press in a dim workshop, the lever pulled down hard, a freshly printed sheet lifted from the bed, dozens of printed sheets fanning outward and filling the air."),
  "G7a-bible": gen("An open German Bible on a plain wooden table, morning light from a small window, a wooden cup beside it."),
  "G7b-family": gen("A family of five at a farmhouse kitchen table, a father reading aloud from a small book, children listening, seen from the side with faces soft and in shadow, candle and hearth light."),

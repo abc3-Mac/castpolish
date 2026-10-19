@@ -18,13 +18,13 @@ Legend: **VO** = ElevenLabs narration · **PASTOR** = on-camera, recorded in the
 
 | Time | Visual | Audio |
 |---|---|---|
-| 0:00–0:03 | Black frame. Rain streaks appear. Caption fades up: **"July 1505 · A road near Erfurt, Germany"** | *SFX: steady rain, distant thunder rolling. No music yet.* |
+| 0:00–0:03 | Rain over the dark road (G1). Title fades up: **"Is God for or against me?"**, with a small caption beneath: **"July 1505 · A road near Erfurt, Germany"** | *SFX: steady rain, distant thunder rolling. No music yet.* |
 | | | **VO (low, close, unhurried):** "A storm. A dirt road. A young law student, alone." |
 | 0:03–0:10 | Grok composite: painterly 16th-century road, a cloaked figure, sky splits with lightning. Hard white flash on the strike. Figure thrown down in the mud. | *SFX: lightning crack, LOUD, then ringing silence.* |
 | | | **VO:** "Lightning strikes so close it throws him to the ground. Martin Luther cries out: 'Saint Anne, help me! I will become a monk!'" |
 | 0:10–0:19 | Monastery cell. Stone, one candle, hands gripping a Bible, a kneeling figure in shadow. Slow push-in. | *MUSIC: single low cello or organ pedal tone fades in, very quiet.* |
 | | | **VO:** "He kept that vow. Prayed, fasted, confessed for hours — and was still terrified. How could a sinner stand before a holy God?" |
-| 0:19–0:28 | Pages turning. Light grows across the page, then lifts to a plain wooden cross on the cell wall. Caption: **"The righteous shall live by faith." — Romans 1:17** | *SFX: page turns. MUSIC: a warm major chord resolves.* |
+| 0:19–0:28 | Pages turning. Light grows across the page, then lifts to a crucifix on the cell wall. Caption: **"The righteous shall live by faith." — Romans 1:17** | *SFX: page turns. MUSIC: a warm major chord resolves.* |
 | | | **VO:** "Then he found it in Romans: 'The righteous shall live by faith.' He'd been climbing toward God. God had already come down — in Jesus. Not earned. Not bought. Given." |
 | 0:28–0:36 | YOUR Wittenberg Castle Church door photo (`05-stills-wittenberg/THESES-DOOR_bronze_2010_IMG_0801.jpg`): start tight on the crucifixion mosaic above the door — Christ on the cross, Luther and Melanchthon kneeling — then tilt down and push in to the bronze door. Caption: **"October 31, 1517"**. Cut to printing-press plates slamming, pages flying. | *SFX: three hammer strikes, then a printing press thump and paper rustle.* |
 | | | **VO:** "October 31, 1517. He nails ninety-five theses to a church door in Wittenberg. The printing press does the rest." |
@@ -32,9 +32,9 @@ Legend: **VO** = ElevenLabs narration · **PASTOR** = on-camera, recorded in the
 | | | **VO:** "Soon ordinary people had a Bible in their own language — and met Jesus in it for themselves." |
 | 0:44–0:62 | **PASTOR ON CAMERA.** Sanctuary, altar soft-focused behind, daylight from windows. Medium shot, eyes to lens. Small caption lower third: **Pastor Albert Collver · Saint Paul's Lutheran, Troy, IL** | *MUSIC: ducks to barely audible under speech.* |
 | | | **PASTOR:** "Five hundred years later, the question is the same: *Am I enough?* The honest answer is no — but Jesus is. You are forgiven, and you are free to love your neighbor." |
-| 0:62–0:78 | Church exterior in Troy: steeple, sign, front doors opening, candles being lit, a hymnal handed to someone, coffee in the basement classroom, a few friendly faces. Caption builds line by line: **Saturday 5 PM · Sunday 9 AM · Bible Class 10:30 AM** | *SFX: church bell, one or two strikes. MUSIC: "A Mighty Fortress" melody enters clearly.* |
+| 0:62–0:78 | Church exterior in Troy (the bell-tower photo in `04-broll/troy-church/`, then live B-roll when shot): steeple, sign, front doors opening, candles being lit, a hymnal handed to someone, coffee in the basement classroom, a few friendly faces. Caption builds line by line: **Saturday 5 PM · Sunday 9 AM · Bible Class 10:30 AM** | *SFX: church bell, one or two strikes. MUSIC: "A Mighty Fortress" melody enters clearly.* |
 | | | **VO:** "Join us at Saint Paul's Lutheran in Troy — Saturday at 5, Sunday at 9, Bible class at 10:30. Everyone is welcome." |
-| 0:78–0:88 | END CARD (hold 8–10 s): church logo/name, **Reformation Weekend**, times, **112 N. Border St., Troy, IL**, **saintpaulstroy.org** or a QR code. Optional: pastor on camera for the last line, then cut to card. | *MUSIC: "A Mighty Fortress" organ swell, final chord rings out and fades.* |
+| 0:78–0:88 | END CARD over the sanctuary photo, darkened (hold 8–10 s): church logo/name, **Reformation Weekend**, times, **112 N. Border St., Troy, IL**, **saintpaulstroy.org** or a QR code. Optional: pastor on camera for the last line, then cut to card. | *MUSIC: "A Mighty Fortress" organ swell, final chord rings out and fades.* |
 | | | **PASTOR (on camera or VO):** "Come meet the Jesus Luther found. We'll save you a seat." |
 
 ---

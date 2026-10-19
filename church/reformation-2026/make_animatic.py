@@ -7,7 +7,7 @@ Music: 06-music-sfx/organ-underscore-v1.mp3 (ElevenLabs Music stand-in) ducked u
 
 Usage:  python3 make_animatic.py            # 1080x1920 draft
         python3 make_animatic.py --4k       # 2160x3840
-Output: 07-edit/animatic/animatic-v3.mp4 and animatic-v3-timing.txt
+Output: 07-edit/animatic/animatic-v4.mp4 and animatic-v4-timing.txt
 """
 import subprocess, sys, pathlib, textwrap, shutil
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -35,14 +35,14 @@ def still(rel):
 # Each: name, fallback voice, line, shots [(image|clip|None, caption, slate, darken, zoom)], pad seconds
 S = [
  ("01-open", VO_VOICE, "A storm. A dirt road. A young law student, alone.",
-  [("grok:G1-road/G1-road-v1.jpg", "July 1505 · A road near Erfurt, Germany", "", 0.25, "in")], 1.0),
+  [("grok:G1-road/G1-road-v1.jpg", "Is God for or\nagainst me?\n\n§July 1505 · A road near Erfurt, Germany", "", 0.3, "in")], 1.0),
  ("02-strike", VO_VOICE, "Lightning strikes so close it throws him to the ground. Martin Luther cries out: \"Saint Anne, help me! I will become a monk!\"",
   [("grok:G2-strike/G2-strike-v2.mp4", "", "", 0, "clip")], 0.35),
  ("03-cell", VO_VOICE, "He kept that vow. Prayed, fasted, confessed for hours — and was still terrified. How could a sinner stand before a holy God?",
   [("grok:G3-cell/G3-cell-v1.jpg", "", "", 0.1, "in")], 0.35),
  ("04-romans", VO_VOICE, "Then he found it in Romans: \"The righteous shall live by faith.\" He'd been climbing toward God. God had already come down — in Jesus. Not earned. Not bought. Given.",
-  [("grok:G4-page/G4-page-v1.jpg", "“The righteous shall live by faith.”\n— Romans 1:17", "", 0.05, "in"),
-   ("grok:G4b-cross/G4b-cross-v1.jpg", "", "", 0.0, "in")], 0.35),
+  [("grok:G4-page/G4-page-v2.jpg", "“The righteous shall live by faith.”\n— Romans 1:17", "", 0.05, "in"),
+   ("grok:G4b-cross/G4b-cross-v2.jpg", "", "", 0.0, "in")], 0.35),
  ("05-door", VO_VOICE, "October 31, 1517. He nails ninety-five theses to a church door in Wittenberg. The printing press does the rest.",
   [("THESES-DOOR_bronze_2010_IMG_0801.jpg", "October 31, 1517", "", 0.05, "in"),
    ("grok:G6-press/G6-press-v1.jpg", "", "", 0.0, "out")], 0.3),
@@ -55,9 +55,9 @@ S = [
  ("07-pastor", PASTOR_VOICE, "Five hundred years later, the question is the same: Am I enough? The honest answer is no — but Jesus is. You are forgiven, and you are free to love your neighbor.",
   [("google-album-wittenberg-2010/012_IMG_0804.jpg", "Pastor Albert Collver · Saint Paul's Lutheran, Troy, IL", "PASTOR ON CAMERA — record in the sanctuary, altar behind, eyes to lens (voice is a clone stand-in)", 0.5, "none")], 0.35),
  ("08-invite", VO_VOICE, "Join us at Saint Paul's Lutheran in Troy — Saturday at 5, Sunday at 9, Bible class at 10:30. Everyone is welcome.",
-  [(None, "Saturday 5 PM\nSunday 9 AM\nBible Class 10:30 AM", "Troy B-roll: steeple, sign, doors opening, candles, coffee, faces — placeholder", 0, "none")], 0.3),
+  [("/Users/abc3/Movies/Reformation-2026/04-broll/troy-church/IMG_4628.HEIC#center=0.27,0.45", "Saturday 5 PM\nSunday 9 AM\nBible Class 10:30 AM", "", 0.45, "in")], 0.3),
  ("09-end", PASTOR_VOICE, "Come meet the Jesus Luther found. We'll save you a seat.",
-  [(None, "Saint Paul's Lutheran Church\nREFORMATION WEEKEND\n\nSaturday 5 PM · Sunday 9 AM\nBible Class 10:30 AM\n\n112 N. Border St, Troy, IL\nsaintpaulstroy.org", "", 0, "none")], 6.0),
+  [("/Users/abc3/Movies/Reformation-2026/04-broll/troy-church/IMG_0599.DNG", "Saint Paul's Lutheran Church\nREFORMATION WEEKEND\n\nSaturday 5 PM · Sunday 9 AM\nBible Class 10:30 AM\n\n112 N. Border St, Troy, IL\nsaintpaulstroy.org", "", 0.5, "in")], 6.0),
 ]
 
 # ---------------------------------------------------------------- helpers
@@ -72,8 +72,11 @@ def dur(path):
 def load_cover(rel):
     """Open a still, crop to 9:16 cover at RWxRH (upscales small Grok frames). '#mosaic' = top of the door photo."""
     name, _, mode = rel.partition("#")
+    centre = (0.5, 0.45)
+    if mode.startswith("center="):
+        centre = tuple(float(v) for v in mode[7:].split(",")); mode = ""
     p = still(name)
-    if p.suffix.lower() == ".heic" or not p.exists():
+    if p.suffix.lower() in (".heic", ".dng") or not p.exists():
         jpg = WORK / (p.stem + ".jpg")
         if not jpg.exists():
             src = p if p.exists() else p.with_suffix(".HEIC")
@@ -82,7 +85,7 @@ def load_cover(rel):
     im = ImageOps.exif_transpose(Image.open(p)).convert("RGB")
     if mode == "mosaic":
         im = im.crop((0, 0, im.width, int(im.height * 0.42)))
-    return ImageOps.fit(im, (RW, RH), Image.LANCZOS, centering=(0.5, 0.45))
+    return ImageOps.fit(im, (RW, RH), Image.LANCZOS, centering=centre)
 
 def font(path, size, index=0):
     try: return ImageFont.truetype(path, size, index=index)
@@ -106,11 +109,17 @@ def render_frame(image_rel, caption, slate, darken):
     d = ImageDraw.Draw(im, "RGBA")
     if caption:
         big = "\n" in caption and len(caption) > 60          # end card
-        f = font(F_SERIF, int(RW * (0.052 if big else 0.062)))
-        wrapped = "\n".join(textwrap.fill(l, 28) if l else "" for l in caption.split("\n"))
-        n = wrapped.count("\n") + 1
-        y = RH * 0.42 - n * f.size * 1.25 / 2 if (image_rel is None or big) else RH * 0.70
-        draw_center(d, wrapped, f, y, (245, 238, 220))
+        title = caption.startswith("Is God")
+        f = font(F_SERIF, int(RW * (0.052 if big else 0.078 if title else 0.062)))
+        fs = font(F_SERIF, int(f.size * 0.5))
+        lines = [textwrap.fill(l, 28) if (l and not l.startswith("§")) else l for l in caption.split("\n")]
+        n = sum(1 for l in lines if not l.startswith("§")) + sum(0.6 for l in lines if l.startswith("§"))
+        y = RH * 0.42 - n * f.size * 1.25 / 2 if (image_rel is None or big or title) else RH * 0.70
+        for l in lines:
+            if l.startswith("§"):
+                draw_center(d, l[1:], fs, y, (230, 220, 200)); y += fs.size * 1.4
+            else:
+                draw_center(d, l, f, y, (245, 238, 220)); y += f.size * 1.25 * (l.count("\n") + 1)
     if slate:
         f = font(F_SANS, int(RW * 0.030), 0)
         wrapped = textwrap.fill("STAND-IN · " + slate, 46)
@@ -175,10 +184,11 @@ for name, voice, line, shots, pad in S:
          "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-shortest", str(out)])
     timing.append((name, t, total, vo, source)); t += total; seg_files.append(out)
 
-MUSIC = ROOT / "06-music-sfx/organ-underscore-v1.mp3"   # ElevenLabs Music stand-in; organist recording replaces it
-dry = WORK / "animatic-v3-nomusic.mp4"
+MUSIC = ROOT / "06-music-sfx/organ-mighty-fortress-v1.mp3"   # synthesized Ein feste Burg; organist recording replaces it
+if not MUSIC.exists(): MUSIC = ROOT / "06-music-sfx/organ-underscore-v1.mp3"
+dry = WORK / "animatic-v4-nomusic.mp4"
 concat(seg_files, dry)
-final = WORK / ("animatic-v3-4k.mp4" if FOURK else "animatic-v3.mp4")
+final = WORK / ("animatic-v4-4k.mp4" if FOURK else "animatic-v4.mp4")
 if MUSIC.exists():
     # music under the whole piece, ducked by the voice, faded out over the last 4 s
     run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(dry), "-i", str(MUSIC), "-filter_complex",
@@ -193,5 +203,5 @@ else:
 report = [f"{'segment':12s} {'start':>7s} {'length':>7s} {'speech':>7s}  voice"]
 report += [f"{n:12s} {s:7.1f} {d:7.1f} {v:7.1f}  {src}" for n, s, d, v, src in timing]
 report += ["", f"TOTAL {t:.1f} s  (cap 90 s)   output: {final}  {W}x{H} @ {FPS} fps", music_note]
-(WORK / "animatic-v3-timing.txt").write_text("\n".join(report) + "\n")
+(WORK / "animatic-v4-timing.txt").write_text("\n".join(report) + "\n")
 print("\n".join(report))

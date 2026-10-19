@@ -18,7 +18,7 @@ cp "$SRC/check-master.sh" "$DEST/08-exports/"
 cp "$SRC/make_animatic.py" "$DEST/07-edit/"
 cp "$SRC/generate_stills.py" "$DEST/03-grok-clips/"
 cp "$SRC/render_vo.py" "$DEST/02-vo/"
-cp "$SRC/gen_underscore.py" "$DEST/06-music-sfx/"
+cp "$SRC/gen_underscore.py" "$SRC/organ_mighty_fortress.py" "$DEST/06-music-sfx/"
 chmod +x "$DEST/08-exports/check-master.sh"
 
 # Grok prompts as a standalone file the Grok agent can read
